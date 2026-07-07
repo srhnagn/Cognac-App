@@ -331,18 +331,18 @@ export default function App() {
       const idx = displayed.findIndex(t => t.id === track.id);
       setNP(displayed[idx]);
       
-      // Geçerli listeyi sıraya koy
-      await mk.setQueue({ items: displayed });
-      
-      // MusicKit sırasındaki gerçek indeksi bul (Eksik şarkılar yüzünden index kaymasını önler)
-      const realIdx = mk.queue.items.findIndex(i => i.id === track.id || i.sourceId === track.id);
-      if (realIdx >= 0) {
-        await mk.changeToMediaAtIndex(realIdx);
+      // Çok daha güvenilir kuyruk ayarlama
+      if (currentPl && !trackQ) {
+         await mk.setQueue({ playlist: currentPl.id, startPosition: idx });
       } else {
-        await mk.changeToMediaAtIndex(idx);
+         await mk.setQueue({ items: displayed });
+         const realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id) ?? idx;
+         await mk.changeToMediaAtIndex(Math.max(0, realIdx));
       }
       await mk.play();
-    } catch (e) { alert('Çalamadı: ' + e.message); }
+    } catch (e) { 
+      alert('Müzik Çalma Hatası: ' + (e.message || JSON.stringify(e))); 
+    }
   };
 
   const playNext = async item => {
