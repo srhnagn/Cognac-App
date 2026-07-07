@@ -169,6 +169,9 @@ export default function App() {
   const [trackQ, setTrackQ]       = useState('');
   const [sortKey, setSortKey]     = useState(null);
   const [sortDir, setSortDir]     = useState('asc');
+
+  const [currentView, setCurrentView] = useState('home'); // 'home' or 'playlists'
+  const [recommendations, setRecommendations] = useState([]);
   const [showSettings, setSettings] = useState(false);
   const [userName, setUserName]   = useState(window.MAC_USER || localStorage.getItem('cognac_username') || 'Apple Music');
 
@@ -196,17 +199,17 @@ export default function App() {
         setMk(m); setCfg(true); setAuth(m.isAuthorized);
         
         m.addEventListener('authorizationStatusDidChange', () => setAuth(m.isAuthorized));
-        m.addEventListener('playbackStateDidChange', e => setPlaying(e.state === window.MusicKit.PlaybackStates.playing));
-        m.addEventListener('queueItemsDidChange', () => updateQ(m));
-        m.addEventListener('queuePositionDidChange', () => updateQ(m));
-        
-        m.addEventListener('mediaItemDidChange', e => {
-          setNP(e.item);
-          setProg(0);
+        m.addEventListener('playbackStateDidChange', () => setPlaying(m.isPlaying));
+        m.addEventListener('nowPlayingItemDidChange', () => setNP(m.nowPlayingItem));
+        m.addEventListener('queuePositionDidChange', () => {
+          updateQ(m);
+        });
+        m.addEventListener('queueItemsDidChange', () => {
           updateQ(m);
         });
         
         fetchStorefront();
+        fetchHome(m);
       } catch (e) { console.error(e); }
     };
     window.MusicKit ? init() : document.addEventListener('musickitloaded', init);
@@ -240,10 +243,19 @@ export default function App() {
 
   const fetchStorefront = async () => {
     try {
-      const r = await fetch('https://api.music.apple.com/v1/me/storefront', { headers: hdrs() });
-      const j = await r.json();
-      setSf(j?.data?.[0]?.id?.toUpperCase() || 'TR');
-    } catch { setSf('TR'); }
+      const m = window.MusicKit.getInstance();
+      const res = await m.api.music('v1/me/storefront');
+      if (res?.data?.data?.[0]?.id) setSf(res.data.data[0].id.toUpperCase());
+    } catch(e) { console.warn("Storefront fetch failed", e); }
+  };
+
+  const fetchHome = async (m) => {
+    try {
+      const res = await m.api.music('v1/me/recommendations');
+      if (res?.data?.data) {
+        setRecommendations(res.data.data);
+      }
+    } catch (e) { console.warn("Home fetch failed", e); }
   };
 
   const fetchPlaylists = async () => {
@@ -359,22 +371,49 @@ export default function App() {
     setDragOverItem(null);
   };
 
+  const fetchAllTracks = async (url, m) => {
+      let allTracks = [];
+      let nextUrl = url;
+      while (nextUrl) {
+          const res = await m.api.music(nextUrl);
+          if (res?.data?.data) allTracks = [...allTracks, ...res.data.data];
+          nextUrl = res?.data?.next;
+      }
+      return allTracks;
+  };
+
   /* ── Playlist ── */
   const openPlaylist = async pl => {
     setCurrentPl(pl); setTracks([]); setTrackQ(''); setSortKey(null); setLyrics(null);
+    setRightPanel('queue'); setLyricsLoading(false);
+    
+    // Eğer Station (Radyo) ise, tracks yoktur, direkt çalmaya başlar:
+    if (pl.type === 'stations' || pl.type === 'personal-recommendation') {
+       try {
+           const m = window.MusicKit.getInstance();
+           await m.setQueue({ station: pl.id });
+           await m.play();
+       } catch(e) { console.error(e); }
+       return;
+    }
+
     try {
+      const m = window.MusicKit.getInstance();
       let allTracks = [];
-      let nextUrl = `https://api.music.apple.com/v1/me/library/playlists/${pl.id}/tracks?limit=100`;
       
-      while (nextUrl) {
-        const url = nextUrl.startsWith('http') ? nextUrl : `https://api.music.apple.com${nextUrl}`;
-        const r = await fetch(url, { headers: hdrs() });
-        const j = await r.json();
-        if (j?.data) allTracks = [...allTracks, ...j.data];
-        nextUrl = j?.next;
+      if (pl.type === 'library-playlists') {
+         allTracks = await fetchAllTracks(`v1/me/library/playlists/${pl.attributes.playParams.id}/tracks`, m);
+      } else if (pl.type === 'playlists') {
+         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/playlists/${pl.id}/tracks`, m);
+      } else if (pl.type === 'albums') {
+         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/albums/${pl.id}/tracks`, m);
       }
+
       setTracks(allTracks);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      alert('Şarkılar yüklenirken bir hata oluştu.');
+    }
   };
 
   /* ── Playback ── */
@@ -487,6 +526,7 @@ export default function App() {
   const volPct = Math.round((muted ? 0 : volume) * 100);
   const VIcon  = muted || volume === 0 ? I.volMute : volume < 0.5 ? I.volLow : I.volHigh;
   const isNP   = t => nowPlaying && t.id === nowPlaying.id;
+  const filteredPl = playlists.filter(p => p.attributes.name.toLowerCase().includes(trackQ.toLowerCase()));
 
   const hasRightPanel = rightPanel !== null;
 
@@ -582,7 +622,15 @@ export default function App() {
             <div className="user-badge"><I.settings /></div>
           </div>
 
-          <div className="section-label">Kütüphane</div>
+          <div className="sidebar-group">Kütüphane</div>
+          <ul>
+            <li className={currentView === 'home' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
+              <span className="icon">🏠</span> Ana Sayfa
+            </li>
+            <li className={currentView === 'playlists' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('playlists'); setCurrentPl(null); setTrackQ(''); }}>
+              <span className="icon">🎵</span> Çalma Listeleri
+            </li>
+          </ul>
 
           <div className="playlists-scroll">
             {playlists.map(pl => {
@@ -615,11 +663,62 @@ export default function App() {
 
         {/* ── MAIN ── */}
         <main className="main">
-          {currentPl ? (
+          {!currentPl ? (
+            <div className="library-view">
+              {currentView === 'home' ? (
+                <>
+                  <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
+                  {recommendations.length > 0 ? recommendations.map(rec => (
+                    <div key={rec.id} style={{ marginBottom: '3rem' }}>
+                      <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>
+                        {rec.attributes.title.stringForDisplay}
+                      </h2>
+                      <div className="grid">
+                        {rec.relationships.contents.data.map(item => (
+                          <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
+                            <div className="card-img-wrap">
+                              <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
+                              <div className="card-play-overlay"><I.play /></div>
+                            </div>
+                            <div className="card-info">
+                              <div className="card-title">{item.attributes.name}</div>
+                              <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )) : (
+                     <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="lib-header">
+                    <h1 className="page-title">Çalma Listeleri</h1>
+                    <button className="new-pl-btn" onClick={() => setEditPl({})}>+ Yeni Liste</button>
+                  </div>
+                  <div className="grid">
+                    {filteredPl.map(p => (
+                      <div key={p.id} className="card" onClick={() => openPlaylist(p)} onContextMenu={e => { e.preventDefault(); setPlCtxMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}>
+                        <div className="card-img-wrap">
+                          <img src={artURL(p.attributes.artwork, 300)} alt="Cover" />
+                          <div className="card-play-overlay"><I.play /></div>
+                        </div>
+                        <div className="card-info">
+                          <div className="card-title">{p.attributes.name}</div>
+                          <div className="card-artist">Apple Music</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
             <>
               <div className="main-header">
                 <div className="header-left">
-                  {/* Big playlist cover */}
                   {(() => {
                     const cover = artURL(currentPl.attributes?.artwork, 80);
                     const grad  = playlistGradient(currentPl.attributes.name);
@@ -691,12 +790,6 @@ export default function App() {
                 {displayed.length === 0 && <div className="empty-state"><div>🔍</div><p>Sonuç yok</p></div>}
               </div>
             </>
-          ) : (
-            <div className="home-screen">
-              <img src="/icon-192.png" className="home-icon" alt="Cognac" />
-              <div className="home-title">Müzik Krallığına Hoş Geldiniz</div>
-              <div className="home-sub">Sol menüden bir liste seçin<br/><span style={{opacity:.5, fontSize:'.82rem'}}>Space = oynat · ← → = şarkı geç · ↑ ↓ = ses</span></div>
-            </div>
           )}
         </main>
 
