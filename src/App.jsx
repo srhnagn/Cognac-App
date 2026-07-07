@@ -177,12 +177,16 @@ export default function App() {
 
   /* ── Init MusicKit ── */
   useEffect(() => {
-    const updateQueueState = (m) => {
-      if (!m || !m.queue) return;
-      const items = m.queue.items || [];
-      const pos = m.queue.position ?? 0;
-      setQueueHistory(items.slice(Math.max(0, pos - 20), pos));
-      setQueue(items.slice(pos + 1, pos + 50)); // top 50 upcoming
+    const updateQ = () => {
+      const items = mk.queue.items || [];
+      const pos   = mk.queue.position ?? 0;
+      setQueue(items.slice(pos + 1, pos + 20));
+      setHistory(items.slice(Math.max(0, pos - 20), pos).reverse());
+      
+      try {
+        localStorage.setItem('cognac_queue', JSON.stringify(items));
+        localStorage.setItem('cognac_queue_pos', pos.toString());
+      } catch(e) {}
     };
 
     const init = async () => {
@@ -193,14 +197,17 @@ export default function App() {
         
         m.addEventListener('authorizationStatusDidChange', () => setAuth(m.isAuthorized));
         m.addEventListener('playbackStateDidChange', e => setPlaying(e.state === window.MusicKit.PlaybackStates.playing));
-        m.addEventListener('queueItemsDidChange', () => updateQueueState(m));
-        m.addEventListener('queuePositionDidChange', () => updateQueueState(m));
+        m.addEventListener('queueItemsDidChange', updateQ);
+        m.addEventListener('queuePositionDidChange', updateQ);
         
         m.addEventListener('mediaItemDidChange', e => {
-          setNP(e.item);
+          setNowPlaying(e.item);
           setProg(0);
-          updateQueueState(m);
+          updateQ();
         });
+        
+        // Sıra yükleme mantığı MusicKit objelerini bozduğu için geçici olarak devre dışı bırakıldı.
+        fetchStorefront();
       } catch (e) { console.error(e); }
     };
     window.MusicKit ? init() : document.addEventListener('musickitloaded', init);
@@ -214,7 +221,7 @@ export default function App() {
           setProg(mk.currentPlaybackTime || 0); 
           setDur(mk.currentPlaybackDuration || 0); 
           if (mk.nowPlayingItem && (!nowPlaying || mk.nowPlayingItem.id !== nowPlaying.id)) {
-            setNP(mk.nowPlayingItem);
+            setNowPlaying(mk.nowPlayingItem);
           }
         }
       }, 500);
@@ -260,18 +267,18 @@ export default function App() {
       const m = window.MusicKit.getInstance();
       
       // Şarkının orijinal mağazasını (storefront) URL'den çek (örn: /ru/ veya /tr/)
-      const itemStorefront = item?.attributes?.url?.match(/music\.apple\.com\/([a-z]{2})\//i)?.[1]?.toLowerCase() || storefront.toLowerCase();
+      const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/songs/${catalogId}/lyrics`);
+      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.plainLyrics;
       
-      const res = await m.api.music(`v1/catalog/${itemStorefront}/songs/${catalogId}/lyrics`);
-      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml;
       if (ttml) {
-        // More robust parsing: strip all HTML/XML tags
         const rawText = ttml.replace(/<[^>]+>/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
         setLyrics(rawText.length ? rawText : ['Sözler bulunamadı.']);
       } else {
-        setLyrics(['Sözler mevcut değil. (Apple yetkisi yok)']);
+        setLyrics([`Sözler mevcut değil. (API Yanıtı: ${JSON.stringify(res)})`]);
       }
-    } catch (e) { setLyrics(['Sözler bu şarkı için mevcut değil.']); }
+    } catch (e) { 
+      setLyrics([`HATA: ${e.message || JSON.stringify(e)}`, `CatalogID: ${item?.attributes?.playParams?.catalogId || item?.id}`]); 
+    }
     finally { setLyricsLoading(false); }
   };
 
