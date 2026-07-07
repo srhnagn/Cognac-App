@@ -182,7 +182,7 @@ export default function App() {
       const items = m_instance.queue.items || [];
       const pos   = m_instance.queue.position ?? 0;
       setQueue(items.slice(pos + 1, pos + 20));
-      setHistory(items.slice(Math.max(0, pos - 20), pos).reverse());
+      setQueueHistory(items.slice(Math.max(0, pos - 20), pos).reverse());
     };
 
     const init = async () => {
