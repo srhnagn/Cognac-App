@@ -27,6 +27,7 @@ function playlistGradient(name = '') {
 const I = {
   shuffle:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>,
   home: ({className=''}) => <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
+  search: ({className=''}) => <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
   music: ({className=''}) => <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>,
   prev:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2" height="16" rx="1"/></svg>,
   next:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16" rx="1"/></svg>,
@@ -654,15 +655,20 @@ export default function App() {
             <div className="user-badge"><I.settings /></div>
           </div>
 
-          <div className="section-label">Kütüphane</div>
+          <div className="section-label">Apple Music</div>
           <ul>
+            <li className={currentView === 'search' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('search'); setCurrentPl(null); setTrackQ(''); }}>
+              <I.search className="icon" /> Ara
+            </li>
             <li className={currentView === 'home' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
               <I.home className="icon" /> Ana Sayfa
             </li>
-            <li className={currentView === 'playlists' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('playlists'); setCurrentPl(null); setTrackQ(''); }}>
-              <I.music className="icon" /> Çalma Listeleri
-            </li>
           </ul>
+
+          <div className="section-label" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '1rem' }}>
+            <span>Kütüphane</span>
+            <button onClick={() => setEditPl({})} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '1.2rem', padding: 0, opacity: 0.6 }} title="Yeni Liste Oluştur">+</button>
+          </div>
 
           <div className="playlists-scroll">
             {playlists.map(pl => {
@@ -723,25 +729,12 @@ export default function App() {
                    <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
                 )}
               </div>
-            ) : currentView === 'playlists' ? (
+            ) : currentView === 'search' ? (
               <div className="library-view">
-                <div className="lib-header">
-                  <h1 className="page-title">Çalma Listeleri</h1>
-                  <button className="new-pl-btn" onClick={() => setEditPl({})}>+ Yeni Liste</button>
-                </div>
-                <div className="grid">
-                  {filteredPl.map(p => (
-                    <div key={p.id} className="card" onClick={() => openPlaylist(p)} onContextMenu={e => { e.preventDefault(); setPlCtxMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}>
-                      <div className="card-img-wrap">
-                        <img src={artURL(p.attributes.artwork, 300)} alt="Cover" />
-                        <div className="card-play-overlay"><I.play /></div>
-                      </div>
-                      <div className="card-info">
-                        <div className="card-title">{p.attributes.name}</div>
-                        <div className="card-artist">Apple Music</div>
-                      </div>
-                    </div>
-                  ))}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                   <I.search style={{ width: '48px', height: '48px', opacity: 0.2, marginBottom: '1rem' }} />
+                   <h2 style={{ opacity: 0.5 }}>Apple Music'te Ara</h2>
+                   <p style={{ opacity: 0.4, fontSize: '0.9rem', marginTop: '0.5rem' }}>Katalog araması yakında eklenecek.</p>
                 </div>
               </div>
             ) : (
