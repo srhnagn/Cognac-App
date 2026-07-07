@@ -337,20 +337,10 @@ export default function App() {
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
-      setNP(displayed[idx]);
-      
-      // Çok daha güvenilir kuyruk ayarlama
-      if (currentPl && !trackQ) {
-         await mk.setQueue({ playlist: currentPl.id, startPosition: idx });
-      } else {
-         await mk.setQueue({ items: displayed });
-         const realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id) ?? idx;
-         await mk.changeToMediaAtIndex(Math.max(0, realIdx));
-      }
+      await mk.setQueue({ items: displayed });
+      await mk.changeToMediaAtIndex(idx);
       await mk.play();
-    } catch (e) { 
-      alert('Müzik Çalma Hatası: ' + (e.message || JSON.stringify(e))); 
-    }
+    } catch (e) { alert('Çalamadı: ' + e.message); }
   };
 
   const playNext = async item => {
