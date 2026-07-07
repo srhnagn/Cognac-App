@@ -488,6 +488,10 @@ export default function App() {
   };
 
   const playTrack = async track => {
+    if (!track.attributes?.playParams) {
+       alert("Apple Music, bu şarkının çalınmasını (telif, bölge kısıtlaması veya katalog eksikliği sebebiyle) web üzerinden engelliyor.");
+       return;
+    }
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
       const safeQueue = displayed.slice(idx, idx + 100);
@@ -939,17 +943,19 @@ export default function App() {
               <div className="track-list">
                 {displayed.map((t, i) => {
                   const tCover = artURL(t.attributes?.artwork, 38);
-                  const tGrad  = playlistGradient(t.attributes.albumName || t.attributes.name);
+                  const tGrad  = playlistGradient(t.attributes?.albumName || t.attributes?.name || 'x');
+                  const isUnplayable = !t.attributes?.playParams;
                   return (
                     <div
                       key={t.id + i}
-                      className={`track-row ${isNP(t) ? 'is-playing' : ''}`}
+                      className={`track-row ${isNP(t) ? 'is-playing' : ''} ${isUnplayable ? 'unplayable' : ''}`}
+                      style={{ opacity: isUnplayable ? 0.35 : 1, filter: isUnplayable ? 'grayscale(100%)' : 'none' }}
                       onClick={() => playTrack(t)}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, track: t }); }}
                     >
-                      <div className="t-num">
+                      <div className="t-num" style={{ textDecoration: isUnplayable ? 'line-through' : 'none' }}>
                         <span className="t-n">{i + 1}</span>
-                        <span className="t-p"><I.playSmall /></span>
+                        <span className="t-p">{isUnplayable ? '🚫' : <I.playSmall />}</span>
                       </div>
                       {tCover
                         ? <img src={tCover} className="t-cover" alt="" />
