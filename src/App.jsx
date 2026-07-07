@@ -337,10 +337,14 @@ export default function App() {
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
-      await mk.setQueue({ items: displayed });
-      await mk.changeToMediaAtIndex(idx);
+      if (currentPl && !trackQ) {
+         await mk.setQueue({ playlist: currentPl.id, startPosition: idx });
+      } else {
+         await mk.setQueue({ items: displayed });
+         await mk.changeToMediaAtIndex(idx);
+      }
       await mk.play();
-    } catch (e) { alert('Çalamadı: ' + e.message); }
+    } catch (e) { alert('Müzik Hatası: ' + e.message); }
   };
 
   const playNext = async item => {
