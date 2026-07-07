@@ -296,18 +296,38 @@ export default function App() {
   const fetchHome = async () => {
     try {
       const rec = await fetch('https://api.music.apple.com/v1/me/recommendations', { headers: hdrs() }).then(r => r.json());
-      if (rec?.data) {
-        const rank = t => {
-          const s = t.toLowerCase();
-          if (s.includes('top') || s.includes('seç')) return 1;
-          if (s.includes('recent') || s.includes('son')) return 2;
-          if (s.includes('playlist') || s.includes('liste')) return 3;
-          if (s.includes('station') || s.includes('istasyon') || s.includes('radyo')) return 4;
-          return 99;
-        };
-        const sorted = [...rec.data].sort((a, b) => rank(a.attributes?.title?.stringForDisplay || '') - rank(b.attributes?.title?.stringForDisplay || ''));
-        setRecommendations(sorted);
+      if (!rec?.data) rec.data = [];
+
+      const recent = await fetch('https://api.music.apple.com/v1/me/recent/played', { headers: hdrs() }).then(r => r.json());
+      if (recent?.data) {
+        rec.data.push({
+          id: 'recent',
+          attributes: { title: { stringForDisplay: 'Son Çalınanlar' } },
+          relationships: { contents: { data: recent.data } }
+        });
       }
+
+      const heavy = await fetch('https://api.music.apple.com/v1/me/history/heavy-rotation', { headers: hdrs() }).then(r => r.json());
+      if (heavy?.data) {
+        rec.data.push({
+          id: 'heavy',
+          attributes: { title: { stringForDisplay: 'En Çok Dinlenenler' } },
+          relationships: { contents: { data: heavy.data } }
+        });
+      }
+
+      const rank = t => {
+        const s = t.toLowerCase();
+        if (s.includes('top') || s.includes('seç')) return 1;
+        if (s.includes('recent') || s.includes('son')) return 2;
+        if (s.includes('playlist') || s.includes('liste')) return 3;
+        if (s.includes('heavy') || s.includes('çok')) return 4;
+        if (s.includes('station') || s.includes('istasyon') || s.includes('radyo')) return 5;
+        return 99;
+      };
+      
+      const sorted = [...rec.data].sort((a, b) => rank(a.attributes?.title?.stringForDisplay || '') - rank(b.attributes?.title?.stringForDisplay || ''));
+      setRecommendations(sorted);
     } catch (e) { console.warn("Home fetch failed", e); }
   };
 
@@ -488,10 +508,6 @@ export default function App() {
   };
 
   const playTrack = async track => {
-    if (!track.attributes?.playParams) {
-       alert("Apple Music, bu şarkının çalınmasını (telif, bölge kısıtlaması veya katalog eksikliği sebebiyle) web üzerinden engelliyor.");
-       return;
-    }
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
       const safeQueue = displayed.slice(idx, idx + 100);
@@ -944,18 +960,16 @@ export default function App() {
                 {displayed.map((t, i) => {
                   const tCover = artURL(t.attributes?.artwork, 38);
                   const tGrad  = playlistGradient(t.attributes?.albumName || t.attributes?.name || 'x');
-                  const isUnplayable = !t.attributes?.playParams;
                   return (
                     <div
                       key={t.id + i}
-                      className={`track-row ${isNP(t) ? 'is-playing' : ''} ${isUnplayable ? 'unplayable' : ''}`}
-                      style={{ opacity: isUnplayable ? 0.35 : 1, filter: isUnplayable ? 'grayscale(100%)' : 'none' }}
+                      className={`track-row ${isNP(t) ? 'is-playing' : ''}`}
                       onClick={() => playTrack(t)}
                       onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, track: t }); }}
                     >
-                      <div className="t-num" style={{ textDecoration: isUnplayable ? 'line-through' : 'none' }}>
+                      <div className="t-num">
                         <span className="t-n">{i + 1}</span>
-                        <span className="t-p">{isUnplayable ? '🚫' : <I.playSmall />}</span>
+                        <span className="t-p"><I.playSmall /></span>
                       </div>
                       {tCover
                         ? <img src={tCover} className="t-cover" alt="" />
