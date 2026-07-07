@@ -56,13 +56,16 @@ const I = {
 /* ─── Context Menu ─── */
 function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToQueue, onAddToPlaylist }) {
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const style = { left: x, top: y };
+  if (x > window.innerWidth - 220) style.left = window.innerWidth - 220;
+  if (y > window.innerHeight - 350) style.top = window.innerHeight - 350;
   useEffect(() => {
     const h = () => onClose();
     window.addEventListener('click', h);
     return () => window.removeEventListener('click', h);
   }, []);
   return (
-    <div className="ctx-menu" style={{ left: x, top: y }} onClick={e => e.stopPropagation()}>
+    <div className="ctx-menu" style={style} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(track); onClose(); }}>
         <I.playSmall /> Sıradaki Yap
       </div>
@@ -94,13 +97,16 @@ function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToQueue
 }
 
 function PlaylistContextMenu({ x, y, playlist, onClose, onPlayNext, onShuffle, onEdit }) {
+  const style = { left: x, top: y };
+  if (x > window.innerWidth - 200) style.left = window.innerWidth - 200;
+  if (y > window.innerHeight - 250) style.top = window.innerHeight - 250;
   useEffect(() => {
     const h = () => onClose();
     window.addEventListener('click', h);
     return () => window.removeEventListener('click', h);
   }, []);
   return (
-    <div className="ctx-menu" style={{ left: x, top: y }} onClick={e => e.stopPropagation()}>
+    <div className="ctx-menu" style={style} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(playlist); onClose(); }}>
         <I.next /> Sıradaki Çal
       </div>
@@ -119,16 +125,31 @@ function PlaylistContextMenu({ x, y, playlist, onClose, onPlayNext, onShuffle, o
   );
 }
 
-function QueueContextMenu({ x, y, track, index, onClose, onRemove, onPlayNext, onAddToPlaylist }) {
+function QueueContextMenu({ x, y, track, index, onClose, onRemove, onPlayNext, onAddToPlaylist, playlists }) {
+  const [showPlaylists, setShowPlaylists] = useState(false);
+  const style = { left: x, top: y };
+  if (x > window.innerWidth - 220) style.left = window.innerWidth - 220;
+  if (y > window.innerHeight - 350) style.top = window.innerHeight - 350;
   useEffect(() => {
     const h = () => onClose();
     window.addEventListener('click', h);
     return () => window.removeEventListener('click', h);
   }, []);
   return (
-    <div className="ctx-menu" style={{ left: x, top: y }} onClick={e => e.stopPropagation()}>
+    <div className="ctx-menu" style={style} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(track); onClose(); }}><I.playSmall /> Sıradaki Yap</div>
-      <div className="ctx-item" onClick={() => { onAddToPlaylist(track, null); onClose(); }}><I.plus /> Listeye Ekle</div>
+      <div className="ctx-item has-sub" onClick={() => setShowPlaylists(s => !s)}>
+        <I.addList /> Listeye Ekle
+        {showPlaylists && (
+          <div className="ctx-submenu">
+            {playlists.map(pl => (
+              <div key={pl.id} className="ctx-item" onClick={() => { onAddToPlaylist(track, pl); onClose(); }}>
+                <I.note /> {pl.attributes.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="ctx-divider" />
       <div className="ctx-item danger" onClick={() => { onRemove(index); onClose(); }}>
         <I.trash /> Sıradan Kaldır
@@ -276,7 +297,16 @@ export default function App() {
     try {
       const rec = await fetch('https://api.music.apple.com/v1/me/recommendations', { headers: hdrs() }).then(r => r.json());
       if (rec?.data) {
-        setRecommendations(rec.data);
+        const rank = t => {
+          const s = t.toLowerCase();
+          if (s.includes('top') || s.includes('seç')) return 1;
+          if (s.includes('recent') || s.includes('son')) return 2;
+          if (s.includes('playlist') || s.includes('liste')) return 3;
+          if (s.includes('station') || s.includes('istasyon') || s.includes('radyo')) return 4;
+          return 99;
+        };
+        const sorted = [...rec.data].sort((a, b) => rank(a.attributes?.title?.stringForDisplay || '') - rank(b.attributes?.title?.stringForDisplay || ''));
+        setRecommendations(sorted);
       }
     } catch (e) { console.warn("Home fetch failed", e); }
   };
@@ -396,7 +426,10 @@ export default function App() {
 
   const fetchAllTracks = async (url) => {
       let allTracks = [];
-      let nextUrl = url.includes('?') ? `${url}&include=catalog` : `${url}?include=catalog`;
+      const isLib = url.includes('/library/');
+      let nextUrl = url;
+      if (isLib) nextUrl = url.includes('?') ? `${url}&include=catalog` : `${url}?include=catalog`;
+      
       while (nextUrl) {
           const fetchUrl = nextUrl.startsWith('http') ? nextUrl : `https://api.music.apple.com${nextUrl.startsWith('/') ? '' : '/'}${nextUrl}`;
           const r = await fetch(fetchUrl, { headers: hdrs() });
@@ -404,8 +437,7 @@ export default function App() {
           const j = await r.json();
           if (j?.data) {
               const tracks = j.data.map(t => {
-                  // Eğer library track'inde playParams yoksa ve catalog ilişkisi varsa oradan al:
-                  if (!t.attributes?.playParams && t.relationships?.catalog?.data?.[0]?.attributes?.playParams) {
+                  if (isLib && !t.attributes?.playParams && t.relationships?.catalog?.data?.[0]?.attributes?.playParams) {
                       if (!t.attributes) t.attributes = {};
                       t.attributes.playParams = t.relationships.catalog.data[0].attributes.playParams;
                   }
@@ -414,7 +446,7 @@ export default function App() {
               allTracks = [...allTracks, ...tracks];
           }
           nextUrl = j?.next;
-          if (nextUrl && !nextUrl.includes('include=catalog')) {
+          if (isLib && nextUrl && !nextUrl.includes('include=catalog')) {
              nextUrl += nextUrl.includes('?') ? '&include=catalog' : '?include=catalog';
           }
       }
@@ -650,6 +682,7 @@ export default function App() {
       {qCtxMenu && (
         <QueueContextMenu
           x={qCtxMenu.x} y={qCtxMenu.y} index={qCtxMenu.index} track={qCtxMenu.track}
+          playlists={playlists}
           onClose={() => setQCtxMenu(null)}
           onRemove={removeFromQueue}
           onPlayNext={playNext}
@@ -784,7 +817,7 @@ export default function App() {
                           </div>
                           <div className="card-info">
                             <div className="card-title">{item.attributes.name}</div>
-                            <div className="card-artist">{item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes.artistName || item.attributes.curatorName || 'Apple Music')}</div>
+                            <div className="card-artist">{item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes.artistName || item.attributes.curatorName || item.attributes.description?.standard || 'Apple Music')}</div>
                           </div>
                         </div>
                       ))}
