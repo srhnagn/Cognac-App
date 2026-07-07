@@ -170,7 +170,7 @@ export default function App() {
   const [sortKey, setSortKey]     = useState(null);
   const [sortDir, setSortDir]     = useState('asc');
 
-  const [currentView, setCurrentView] = useState('home'); // 'home' or 'playlists'
+  const [currentView, setCurrentView] = useState('welcome'); // 'welcome', 'home', 'playlists'
   const [recommendations, setRecommendations] = useState([]);
   const [showSettings, setSettings] = useState(false);
   const [userName, setUserName]   = useState(window.MAC_USER || localStorage.getItem('cognac_username') || 'Apple Music');
@@ -387,10 +387,20 @@ export default function App() {
 
   const fetchAllTracks = async (url, m) => {
       let allTracks = [];
-      let nextUrl = url;
+      let nextUrl = url.includes('?') ? `${url}&include=catalog` : `${url}?include=catalog`;
       while (nextUrl) {
           const res = await m.api.music(nextUrl);
-          if (res?.data?.data) allTracks = [...allTracks, ...res.data.data];
+          if (res?.data?.data) {
+              const tracks = res.data.data.map(t => {
+                  // Eğer library track'inde playParams yoksa ve catalog ilişkisi varsa oradan al:
+                  if (!t.attributes?.playParams && t.relationships?.catalog?.data?.[0]?.attributes?.playParams) {
+                      if (!t.attributes) t.attributes = {};
+                      t.attributes.playParams = t.relationships.catalog.data[0].attributes.playParams;
+                  }
+                  return t;
+              });
+              allTracks = [...allTracks, ...tracks];
+          }
           nextUrl = res?.data?.next;
       }
       return allTracks;
@@ -433,13 +443,6 @@ export default function App() {
   /* ── Playback ── */
   const playTrack = async track => {
     try {
-      // Eğer şarkının çalma lisansı yoksa veya bölgede yasaklıysa Apple Music onu sıraya almaz!
-      if (!track.attributes?.playParams) {
-          setLyrics([`HATA: "${track.attributes?.name || track.title}" şarkısı Türkiye'de çalınamıyor (Lisans/Bölge kısıtlaması) veya grileşmiş bir yerel dosya. Apple bu şarkıyı çalamayacağı için atlıyor.`]);
-          setRightPanel('lyrics');
-          return;
-      }
-
       const idx = displayed.findIndex(t => t.id === track.id);
       const safeQueue = displayed.slice(idx, idx + 100);
       
@@ -643,13 +646,13 @@ export default function App() {
             <div className="user-badge"><I.settings /></div>
           </div>
 
-          <div className="sidebar-group">Kütüphane</div>
+          <div className="section-label">Kütüphane</div>
           <ul>
             <li className={currentView === 'home' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
-              <span className="icon">🏠</span> Ana Sayfa
+              Ana Sayfa
             </li>
             <li className={currentView === 'playlists' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('playlists'); setCurrentPl(null); setTrackQ(''); }}>
-              <span className="icon">🎵</span> Çalma Listeleri
+              Çalma Listeleri
             </li>
           </ul>
 
@@ -713,7 +716,7 @@ export default function App() {
                      <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
                   )}
                 </>
-              ) : (
+              ) : currentView === 'playlists' ? (
                 <>
                   <div className="lib-header">
                     <h1 className="page-title">Çalma Listeleri</h1>
@@ -734,6 +737,12 @@ export default function App() {
                     ))}
                   </div>
                 </>
+              ) : (
+                <div className="home-screen">
+                  <img src="/icon-192.png" className="home-icon" alt="Cognac" />
+                  <div className="home-title">Müzik Krallığına Hoş Geldiniz</div>
+                  <div className="home-sub">Sol menüden bir liste seçin<br/><span style={{opacity:.5, fontSize:'.82rem'}}>Space = oynat · ← → = şarkı geç · ↑ ↓ = ses</span></div>
+                </div>
               )}
             </div>
           ) : (
