@@ -381,19 +381,10 @@ export default function App() {
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
-      const start = Math.max(0, idx - 20);
-      const safeQueue = displayed.slice(start, start + 100);
-      const safeIdx = safeQueue.findIndex(t => t.id === track.id);
+      const safeQueue = displayed.slice(idx, idx + 100);
       
       await mk.setQueue({ items: safeQueue });
-      let realIdx = mk.queue?.items?.findIndex(i => {
-         const iName = i.attributes?.name || i.title;
-         const tName = track.attributes?.name || track.title;
-         return iName === tName;
-      });
-      if (realIdx === undefined || realIdx === -1) realIdx = safeIdx;
-      
-      await mk.changeToMediaAtIndex(Math.max(0, realIdx));
+      await mk.changeToMediaAtIndex(0);
       await mk.play();
     } catch (e) { 
       setLyrics([`KRİTİK ÇALMA HATASI: ${e.message || JSON.stringify(e)}`, `Lütfen bunu kopyalayıp bana at.`]);

@@ -42,7 +42,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
     func applicationDidFinishLaunching(_ n: Notification) {
         buildMenu()
         buildMainWindow()
-        setupMediaKeys()
         waitForServer()
     }
 
@@ -144,34 +143,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
 
     @objc func reloadApp(_ sender: Any?) {
         webView.reload()
-    }
-
-    // MARK: - Media Keys
-    func setupMediaKeys() {
-        let center = MPRemoteCommandCenter.shared()
-        
-        center.playCommand.addTarget { [weak self] _ in
-            self?.webView.evaluateJavaScript("window.MusicKit && window.MusicKit.getInstance().play()")
-            return .success
-        }
-        center.pauseCommand.addTarget { [weak self] _ in
-            self?.webView.evaluateJavaScript("window.MusicKit && window.MusicKit.getInstance().pause()")
-            return .success
-        }
-        center.togglePlayPauseCommand.addTarget { [weak self] _ in
-            let js = "window.MusicKit && (window.MusicKit.getInstance().isPlaying ? window.MusicKit.getInstance().pause() : window.MusicKit.getInstance().play())"
-            self?.webView.evaluateJavaScript(js)
-            return .success
-        }
-        center.nextTrackCommand.addTarget { [weak self] _ in
-            self?.webView.evaluateJavaScript("window.MusicKit && window.MusicKit.getInstance().skipToNextItem()")
-            return .success
-        }
-        center.previousTrackCommand.addTarget { [weak self] _ in
-            let js = "window.MusicKit && (window.MusicKit.getInstance().currentPlaybackTime > 5 ? window.MusicKit.getInstance().seekToTime(0) : window.MusicKit.getInstance().skipToPreviousItem())"
-            self?.webView.evaluateJavaScript(js)
-            return .success
-        }
     }
 
     // MARK: - Auth popup (SubView Overlay)
