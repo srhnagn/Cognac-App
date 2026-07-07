@@ -56,6 +56,7 @@ const I = {
 /* ─── Context Menu ─── */
 function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToQueue, onAddToPlaylist }) {
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const isEdge = x > window.innerWidth - 400;
   const style = { left: x, top: y };
   if (x > window.innerWidth - 220) style.left = window.innerWidth - 220;
   if (y > window.innerHeight - 350) style.top = window.innerHeight - 350;
@@ -65,7 +66,7 @@ function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToQueue
     return () => window.removeEventListener('click', h);
   }, []);
   return (
-    <div className="ctx-menu" style={style} onClick={e => e.stopPropagation()}>
+    <div className={`ctx-menu ${isEdge ? 'edge-right' : ''}`} style={style} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(track); onClose(); }}>
         <I.playSmall /> Sıradaki Yap
       </div>
@@ -127,6 +128,7 @@ function PlaylistContextMenu({ x, y, playlist, onClose, onPlayNext, onShuffle, o
 
 function QueueContextMenu({ x, y, track, index, onClose, onRemove, onPlayNext, onAddToPlaylist, playlists }) {
   const [showPlaylists, setShowPlaylists] = useState(false);
+  const isEdge = x > window.innerWidth - 400;
   const style = { left: x, top: y };
   if (x > window.innerWidth - 220) style.left = window.innerWidth - 220;
   if (y > window.innerHeight - 350) style.top = window.innerHeight - 350;
@@ -136,7 +138,7 @@ function QueueContextMenu({ x, y, track, index, onClose, onRemove, onPlayNext, o
     return () => window.removeEventListener('click', h);
   }, []);
   return (
-    <div className="ctx-menu" style={style} onClick={e => e.stopPropagation()}>
+    <div className={`ctx-menu ${isEdge ? 'edge-right' : ''}`} style={style} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(track); onClose(); }}><I.playSmall /> Sıradaki Yap</div>
       <div className="ctx-item has-sub" onClick={() => setShowPlaylists(s => !s)}>
         <I.addList /> Listeye Ekle
@@ -296,38 +298,18 @@ export default function App() {
   const fetchHome = async () => {
     try {
       const rec = await fetch('https://api.music.apple.com/v1/me/recommendations', { headers: hdrs() }).then(r => r.json());
-      if (!rec?.data) rec.data = [];
-
-      const recent = await fetch('https://api.music.apple.com/v1/me/recent/played', { headers: hdrs() }).then(r => r.json());
-      if (recent?.data) {
-        rec.data.push({
-          id: 'recent',
-          attributes: { title: { stringForDisplay: 'Son Çalınanlar' } },
-          relationships: { contents: { data: recent.data } }
-        });
+      if (rec?.data) {
+        const rank = t => {
+          const s = t.toLowerCase();
+          if (s.includes('top pick') || s.includes('seçilenler') || s.includes('seçtiklerimiz')) return 1;
+          if (s.includes('recent') || s.includes('son çal')) return 2;
+          if (s.includes('made for you') || s.includes('sana özel çalma listeleri')) return 3;
+          if (s.includes('station') || s.includes('istasyon') || s.includes('radyo')) return 4;
+          return 99;
+        };
+        const sorted = [...rec.data].sort((a, b) => rank(a.attributes?.title?.stringForDisplay || '') - rank(b.attributes?.title?.stringForDisplay || ''));
+        setRecommendations(sorted);
       }
-
-      const heavy = await fetch('https://api.music.apple.com/v1/me/history/heavy-rotation', { headers: hdrs() }).then(r => r.json());
-      if (heavy?.data) {
-        rec.data.push({
-          id: 'heavy',
-          attributes: { title: { stringForDisplay: 'En Çok Dinlenenler' } },
-          relationships: { contents: { data: heavy.data } }
-        });
-      }
-
-      const rank = t => {
-        const s = t.toLowerCase();
-        if (s.includes('top') || s.includes('seç')) return 1;
-        if (s.includes('recent') || s.includes('son')) return 2;
-        if (s.includes('playlist') || s.includes('liste')) return 3;
-        if (s.includes('heavy') || s.includes('çok')) return 4;
-        if (s.includes('station') || s.includes('istasyon') || s.includes('radyo')) return 5;
-        return 99;
-      };
-      
-      const sorted = [...rec.data].sort((a, b) => rank(a.attributes?.title?.stringForDisplay || '') - rank(b.attributes?.title?.stringForDisplay || ''));
-      setRecommendations(sorted);
     } catch (e) { console.warn("Home fetch failed", e); }
   };
 
@@ -525,6 +507,7 @@ export default function App() {
     if (e) e.stopPropagation();
     try {
       if (item.type === 'stations') await mk.setQueue({ station: item.id });
+      else if (item.attributes?.url) await mk.setQueue({ url: item.attributes.url });
       else if (item.type.includes('playlist')) await mk.setQueue({ playlist: item.id });
       else if (item.type.includes('album')) await mk.setQueue({ album: item.id });
       else await mk.setQueue({ [item.type]: item.id });
@@ -837,7 +820,9 @@ export default function App() {
                           </div>
                           <div className="card-info">
                             <div className="card-title">{item.attributes.name}</div>
-                            <div className="card-artist">{item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes.artistName || item.attributes.curatorName || item.attributes.description?.standard || 'Apple Music')}</div>
+                            <div className="card-artist">
+                              {item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes?.artistName || item.attributes?.curatorName || item.relationships?.curator?.data?.[0]?.attributes?.name || item.attributes?.description?.short || 'Apple Music')}
+                            </div>
                           </div>
                         </div>
                       ))}
