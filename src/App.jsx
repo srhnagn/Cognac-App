@@ -47,10 +47,11 @@ const I = {
   info:      () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>,
   trash:     () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>,
   edit:      () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  plus:      () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
 };
 
 /* ─── Context Menu ─── */
-function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToPlaylist }) {
+function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToQueue, onAddToPlaylist }) {
   const [showPlaylists, setShowPlaylists] = useState(false);
   useEffect(() => {
     const h = () => onClose();
@@ -60,7 +61,10 @@ function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToPlayl
   return (
     <div className="ctx-menu" style={{ left: x, top: y }} onClick={e => e.stopPropagation()}>
       <div className="ctx-item" onClick={() => { onPlayNext(track); onClose(); }}>
-        <I.next /> Sıradaki Çal
+        <I.playSmall /> Sıradaki Yap
+      </div>
+      <div className="ctx-item" onClick={() => { onAddToQueue(track); onClose(); }}>
+        <I.plus /> Sıraya Ekle
       </div>
       <div className="ctx-divider" />
       <div className="ctx-item has-sub" onClick={() => setShowPlaylists(s => !s)}>
@@ -86,7 +90,7 @@ function ContextMenu({ x, y, track, playlists, onClose, onPlayNext, onAddToPlayl
   );
 }
 
-function PlaylistContextMenu({ x, y, playlist, onClose, onPlayNext, onShuffle }) {
+function PlaylistContextMenu({ x, y, playlist, onClose, onPlayNext, onShuffle, onEdit }) {
   useEffect(() => {
     const h = () => onClose();
     window.addEventListener('click', h);
@@ -247,7 +251,7 @@ export default function App() {
   const fetchLyrics = async (item) => {
     setLyrics(null); setLyricsLoading(true);
     try {
-      const catalogId = nowPlaying.attributes?.playParams?.catalogId;
+      const catalogId = item?.attributes?.playParams?.catalogId || item?.id;
       if (!catalogId) {
         setLyrics(['Sözler bu şarkı için mevcut değil. (Catalog ID yok)']);
         return;
@@ -255,16 +259,19 @@ export default function App() {
       setLyricsLoading(true);
       const m = window.MusicKit.getInstance();
       
-      const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/songs/${catalogId}/lyrics`);
-      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml;
+      // Şarkının orijinal mağazasını (storefront) URL'den çek (örn: /ru/ veya /tr/)
+      const itemStorefront = item?.attributes?.url?.match(/music\.apple\.com\/([a-z]{2})\//i)?.[1]?.toLowerCase() || storefront.toLowerCase();
       
+      const res = await m.api.music(`v1/catalog/${itemStorefront}/songs/${catalogId}/lyrics`);
+      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml;
       if (ttml) {
-        const lines = ttml.match(/<p[^>]*>(.*?)<\/p>/g)?.map(t => t.replace(/<[^>]+>/g, '')) || [];
-        setLyrics(lines.length ? lines : ['Sözler bulunamadı.']);
+        // More robust parsing: strip all HTML/XML tags
+        const rawText = ttml.replace(/<[^>]+>/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        setLyrics(rawText.length ? rawText : ['Sözler bulunamadı.']);
       } else {
-        setLyrics(['Sözler mevcut değil.']);
+        setLyrics(['Sözler mevcut değil. (Apple yetkisi yok)']);
       }
-    } catch (e) { setLyrics(['Sözler yüklenemedi.']); }
+    } catch (e) { setLyrics(['Sözler bu şarkı için mevcut değil.']); }
     finally { setLyricsLoading(false); }
   };
 
@@ -319,18 +326,13 @@ export default function App() {
 
   const playNext = async item => {
     try {
-      if (item.type === 'library-playlists' || item.type === 'playlists') {
-        await mk.queue.prepend({ playlist: item.id });
-      } else {
-        await mk.queue.prepend(item);
-      }
-      if (mk.queue) {
-        const items = mk.queue.items || [];
-        const pos   = mk.queue.position ?? 0;
-        setQueue(items.slice(pos + 1, pos + 20));
-      }
-    }
-    catch { alert('Sıraya eklenemedi.'); }
+      if (mk) await mk.playNext({ items: [item] });
+    } catch (e) { alert('Sıraya eklenemedi: ' + e?.message); }
+  };
+  const addToQueue = async item => {
+    try {
+      if (mk) await mk.playLater({ items: [item] });
+    } catch (e) { alert('Sıranın sonuna eklenemedi: ' + e?.message); }
   };
   
   const shufflePlaylist = async item => {
@@ -418,10 +420,10 @@ export default function App() {
       {/* Context Menu */}
       {ctxMenu && (
         <ContextMenu
-          x={ctxMenu.x} y={ctxMenu.y} track={ctxMenu.track}
-          playlists={playlists}
+          x={ctxMenu.x} y={ctxMenu.y} track={ctxMenu.track} playlists={playlists}
           onClose={() => setCtxMenu(null)}
           onPlayNext={playNext}
+          onAddToQueue={addToQueue}
           onAddToPlaylist={addToPlaylist}
         />
       )}
@@ -473,8 +475,8 @@ export default function App() {
       <div className={`app ${hasRightPanel ? 'has-panel' : ''}`}>
 
         {/* ── SIDEBAR ── */}
-        <aside className="sidebar">
-          <div className="brand">
+        <aside className="sidebar drag-region">
+          <div className="brand no-drag">
             <img src="/icon-192.png" className="brand-logo" alt="Cognac" />
             Cognac
           </div>

@@ -1,6 +1,26 @@
 import AppKit
 import WebKit
 
+// MARK: - Custom Drag View
+class CustomDragView: NSView {
+    override var mouseDownCanMoveWindow: Bool { return true }
+}
+
+// MARK: - Custom Window for Dragging
+class DraggableWindow: NSWindow {
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            let point = event.locationInWindow
+            // Top 40 pixels, avoiding the traffic lights (left 80px)
+            if point.y > self.frame.height - 40 && point.x > 80 {
+                self.performDrag(with: event)
+                return
+            }
+        }
+        super.sendEvent(event)
+    }
+}
+
 // MARK: - Auth Proxy Handler
 // Artık JS injection kullanmadığımız için bu sınıf sadece sembolik kalıyor
 final class AuthProxyHandler: NSObject, WKScriptMessageHandler {
@@ -9,7 +29,7 @@ final class AuthProxyHandler: NSObject, WKScriptMessageHandler {
 
 class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate {
 
-    var window: NSWindow!
+    var window: DraggableWindow!
     var webView: WKWebView!
     
     var authOverlay: WKWebView?
@@ -88,7 +108,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         webView.allowsBackForwardNavigationGestures = false
 
         let bg = NSColor(calibratedRed: 0.055, green: 0.043, blue: 0.031, alpha: 1)
-        window = NSWindow(
+        window = DraggableWindow(
             contentRect: NSMakeRect(0, 0, 1440, 900),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false
@@ -100,6 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         window.isMovableByWindowBackground = true
         window.minSize                    = NSSize(width: 900, height: 600)
         window.contentView                = webView
+        
         window.center()
         window.setFrameAutosaveName("CognacMain")
         window.makeKeyAndOrderFront(nil)

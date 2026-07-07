@@ -1,6 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&display=swap');
 
 :root {
+  --sidebar-w: 260px;
+  --player-h:  90px;
+
+  /* Drag regions */
+  -webkit-app-region: no-drag;
+}
+.drag-region { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
+:root {
   --bg:           #0e0b08;
   --sidebar-bg:   #110e0a;
   --glass:        rgba(255,255,255,0.04);
