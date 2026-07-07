@@ -709,7 +709,7 @@ export default function App() {
         <main className="main">
           {!currentPl ? (
             currentView === 'home' ? (
-              <div className="library-view">
+              <div className="library-view" style={{ padding: '4rem 4rem 2rem 4rem' }}>
                 <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
                 {recommendations.length > 0 ? recommendations.map(rec => (
                   <div key={rec.id} style={{ marginBottom: '3rem' }}>
@@ -732,16 +732,35 @@ export default function App() {
                     </div>
                   </div>
                 )) : (
-                   <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
+                   <div style={{ opacity: 0.5, marginTop: '2rem' }}>Öneriler yükleniyor...</div>
                 )}
               </div>
-            ) : currentView === 'search' ? (
+            ) : currentView === 'playlists' ? (
               <div className="library-view">
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                   <I.search style={{ width: '48px', height: '48px', opacity: 0.2, marginBottom: '1rem' }} />
-                   <h2 style={{ opacity: 0.5 }}>Apple Music'te Ara</h2>
-                   <p style={{ opacity: 0.4, fontSize: '0.9rem', marginTop: '0.5rem' }}>Katalog araması yakında eklenecek.</p>
+                <div className="lib-header">
+                  <h1 className="page-title">Çalma Listeleri</h1>
+                  <button className="new-pl-btn" onClick={() => setEditPl({})}>+ Yeni Liste</button>
                 </div>
+                <div className="grid">
+                  {filteredPl.map(p => (
+                    <div key={p.id} className="card" onClick={() => openPlaylist(p)} onContextMenu={e => { e.preventDefault(); setPlCtxMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}>
+                      <div className="card-img-wrap">
+                        <img src={artURL(p.attributes.artwork, 300)} alt="Cover" />
+                        <div className="card-play-overlay"><I.play /></div>
+                      </div>
+                      <div className="card-info">
+                        <div className="card-title">{p.attributes.name}</div>
+                        <div className="card-artist">Apple Music</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : currentView === 'search' ? (
+              <div className="home-screen">
+                 <I.search style={{ width: '48px', height: '48px', opacity: 0.2, marginBottom: '1rem' }} />
+                 <div className="home-title" style={{ opacity: 0.5 }}>Apple Music'te Ara</div>
+                 <div className="home-sub" style={{ opacity: 0.4 }}>Katalog araması yakında eklenecek.</div>
               </div>
             ) : (
               <div className="home-screen">
