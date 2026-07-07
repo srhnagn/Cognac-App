@@ -319,9 +319,17 @@ export default function App() {
   const openPlaylist = async pl => {
     setCurrentPl(pl); setTracks([]); setTrackQ(''); setSortKey(null); setLyrics(null);
     try {
-      const r = await fetch(`https://api.music.apple.com/v1/me/library/playlists/${pl.id}/tracks?limit=100`, { headers: hdrs() });
-      const j = await r.json();
-      setTracks(j?.data || []);
+      let allTracks = [];
+      let nextUrl = `https://api.music.apple.com/v1/me/library/playlists/${pl.id}/tracks?limit=100`;
+      
+      while (nextUrl) {
+        const url = nextUrl.startsWith('http') ? nextUrl : `https://api.music.apple.com${nextUrl}`;
+        const r = await fetch(url, { headers: hdrs() });
+        const j = await r.json();
+        if (j?.data) allTracks = [...allTracks, ...j.data];
+        nextUrl = j?.next;
+      }
+      setTracks(allTracks);
     } catch (e) { console.error(e); }
   };
 
@@ -374,7 +382,17 @@ export default function App() {
     alert(`"${track.attributes.name}" → "${pl.attributes.name}" listesine eklemek için Apple Music uygulamasını kullanın.`);
   };
 
-  const togglePlay   = () => mk && (playing ? mk.pause() : mk.play());
+  const togglePlay = async () => { 
+    try {
+      if (mk) {
+        if (mk.queue.items.length === 0) {
+          alert('Sıra boş! Lütfen önce bir şarkının üzerine tıklayarak çalmayı başlatın.');
+          return;
+        }
+        playing ? await mk.pause() : await mk.play(); 
+      }
+    } catch(e) { alert('Müzik Hatası: ' + e.message); }
+  };
   const changeVol    = v  => { setVol(v); if (mk) mk.volume = v; setMuted(v === 0); };
   const toggleMute   = () => { if (muted) { changeVol(volume || 0.5); setMuted(false); } else { if (mk) mk.volume = 0; setMuted(true); } };
   const cycleRepeat  = () => setRepeat(r => { const n = (r+1)%3; if (mk) mk.repeatMode = n; return n; });
