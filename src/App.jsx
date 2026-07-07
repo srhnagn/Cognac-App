@@ -231,7 +231,8 @@ export default function App() {
         }
         
         fetchStorefront();
-        fetchHome(m);
+        fetchPlaylists(m);
+        fetchHome();
       } catch (e) { console.error(e); }
     };
     window.MusicKit ? init() : document.addEventListener('musickitloaded', init);
@@ -265,25 +266,24 @@ export default function App() {
 
   const fetchStorefront = async () => {
     try {
-      const m = window.MusicKit.getInstance();
-      const res = await m.api.music('v1/me/storefront');
-      if (res?.data?.data?.[0]?.id) setSf(res.data.data[0].id.toUpperCase());
+      const res = await fetch('https://api.music.apple.com/v1/me/storefront', { headers: hdrs() }).then(r => r.json());
+      if (res?.data?.[0]?.id) setSf(res.data[0].id.toUpperCase());
     } catch(e) { console.warn("Storefront fetch failed", e); }
   };
 
-  const fetchHome = async (m) => {
+  const fetchHome = async () => {
     try {
-      const res = await m.api.music('v1/me/recommendations');
-      if (res?.data?.data) {
-        setRecommendations(res.data.data);
+      const rec = await fetch('https://api.music.apple.com/v1/me/recommendations', { headers: hdrs() }).then(r => r.json());
+      if (rec?.data) {
+        setRecommendations(rec.data);
       }
-      const recent = await m.api.music('v1/me/recent/played');
-      if (recent?.data?.data) {
-        setRecentPlayed(recent.data.data);
+      const recent = await fetch('https://api.music.apple.com/v1/me/recent/played', { headers: hdrs() }).then(r => r.json());
+      if (recent?.data) {
+        setRecentPlayed(recent.data);
       }
-      const heavy = await m.api.music('v1/me/history/heavy-rotation');
-      if (heavy?.data?.data) {
-        setHeavyRotation(heavy.data.data);
+      const heavy = await fetch('https://api.music.apple.com/v1/me/history/heavy-rotation', { headers: hdrs() }).then(r => r.json());
+      if (heavy?.data) {
+        setHeavyRotation(heavy.data);
       }
     } catch (e) { console.warn("Home fetch failed", e); }
   };
@@ -517,10 +517,9 @@ export default function App() {
   const doSearch = async () => {
     if (!searchQuery.trim()) return;
     try {
-      const m = window.MusicKit.getInstance();
-      const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/search?types=songs&limit=50&term=${encodeURIComponent(searchQuery)}`);
-      if (res?.data?.results?.songs?.data) {
-         setSearchResults(res.data.results.songs.data);
+      const res = await fetch(`https://api.music.apple.com/v1/catalog/${storefront.toLowerCase()}/search?types=songs&limit=50&term=${encodeURIComponent(searchQuery)}`, { headers: hdrs() }).then(r => r.json());
+      if (res?.results?.songs?.data) {
+         setSearchResults(res.results.songs.data);
       } else {
          setSearchResults([]);
       }
