@@ -656,14 +656,20 @@ export default function App() {
           </div>
 
           <div className="section-label">Apple Music</div>
-          <ul>
-            <li className={currentView === 'search' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('search'); setCurrentPl(null); setTrackQ(''); }}>
-              <I.search className="icon" /> Ara
-            </li>
-            <li className={currentView === 'home' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
-              <I.home className="icon" /> Ana Sayfa
-            </li>
-          </ul>
+          <div style={{ marginBottom: '0.5rem' }}>
+            <div className={`playlist-item ${currentView === 'search' && !currentPl ? 'active' : ''}`} onClick={() => { setCurrentView('search'); setCurrentPl(null); setTrackQ(''); }}>
+              <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
+                <I.search />
+              </div>
+              <span className="pl-name">Ara</span>
+            </div>
+            <div className={`playlist-item ${currentView === 'home' && !currentPl ? 'active' : ''}`} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
+              <div style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
+                <I.home />
+              </div>
+              <span className="pl-name">Ana Sayfa</span>
+            </div>
+          </div>
 
           <div className="section-label" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '1rem' }}>
             <span>Kütüphane</span>
