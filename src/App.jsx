@@ -208,6 +208,20 @@ export default function App() {
           updateQ(m);
         });
         
+        // Mac Klavye Medya Tuşlarını (F7, F8, F9) JavaScript üzerinden yakala (Swift'e gerek kalmadan):
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.setActionHandler('play', () => m.play());
+            navigator.mediaSession.setActionHandler('pause', () => m.pause());
+            navigator.mediaSession.setActionHandler('nexttrack', () => m.skipToNextItem());
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                if (m.currentPlaybackTime > 5) {
+                    m.seekToTime(0);
+                } else {
+                    m.skipToPreviousItem();
+                }
+            });
+        }
+        
         fetchStorefront();
         fetchHome(m);
       } catch (e) { console.error(e); }
@@ -419,6 +433,13 @@ export default function App() {
   /* ── Playback ── */
   const playTrack = async track => {
     try {
+      // Eğer şarkının çalma lisansı yoksa veya bölgede yasaklıysa Apple Music onu sıraya almaz!
+      if (!track.attributes?.playParams) {
+          setLyrics([`HATA: "${track.attributes?.name || track.title}" şarkısı Türkiye'de çalınamıyor (Lisans/Bölge kısıtlaması) veya grileşmiş bir yerel dosya. Apple bu şarkıyı çalamayacağı için atlıyor.`]);
+          setRightPanel('lyrics');
+          return;
+      }
+
       const idx = displayed.findIndex(t => t.id === track.id);
       const safeQueue = displayed.slice(idx, idx + 100);
       
