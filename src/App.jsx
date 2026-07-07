@@ -26,6 +26,8 @@ function playlistGradient(name = '') {
 /* ─── SVG Icons ─── */
 const I = {
   shuffle:   () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>,
+  home: ({className=''}) => <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
+  music: ({className=''}) => <svg className={className} viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>,
   prev:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="19 20 9 12 19 4 19 20"/><rect x="5" y="4" width="2" height="16" rx="1"/></svg>,
   next:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><rect x="17" y="4" width="2" height="16" rx="1"/></svg>,
   play:      () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
@@ -385,13 +387,16 @@ export default function App() {
     setDragOverItem(null);
   };
 
-  const fetchAllTracks = async (url, m) => {
+  const fetchAllTracks = async (url) => {
       let allTracks = [];
       let nextUrl = url.includes('?') ? `${url}&include=catalog` : `${url}?include=catalog`;
       while (nextUrl) {
-          const res = await m.api.music(nextUrl);
-          if (res?.data?.data) {
-              const tracks = res.data.data.map(t => {
+          const fetchUrl = nextUrl.startsWith('http') ? nextUrl : `https://api.music.apple.com${nextUrl.startsWith('/') ? '' : '/'}${nextUrl}`;
+          const r = await fetch(fetchUrl, { headers: hdrs() });
+          if (!r.ok) break;
+          const j = await r.json();
+          if (j?.data) {
+              const tracks = j.data.map(t => {
                   // Eğer library track'inde playParams yoksa ve catalog ilişkisi varsa oradan al:
                   if (!t.attributes?.playParams && t.relationships?.catalog?.data?.[0]?.attributes?.playParams) {
                       if (!t.attributes) t.attributes = {};
@@ -401,7 +406,10 @@ export default function App() {
               });
               allTracks = [...allTracks, ...tracks];
           }
-          nextUrl = res?.data?.next;
+          nextUrl = j?.next;
+          if (nextUrl && !nextUrl.includes('include=catalog')) {
+             nextUrl += nextUrl.includes('?') ? '&include=catalog' : '?include=catalog';
+          }
       }
       return allTracks;
   };
@@ -426,11 +434,11 @@ export default function App() {
       let allTracks = [];
       
       if (pl.type === 'library-playlists') {
-         allTracks = await fetchAllTracks(`v1/me/library/playlists/${pl.attributes.playParams.id}/tracks`, m);
+         allTracks = await fetchAllTracks(`v1/me/library/playlists/${pl.attributes.playParams.id}/tracks`);
       } else if (pl.type === 'playlists') {
-         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/playlists/${pl.id}/tracks`, m);
+         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/playlists/${pl.id}/tracks`);
       } else if (pl.type === 'albums') {
-         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/albums/${pl.id}/tracks`, m);
+         allTracks = await fetchAllTracks(`v1/catalog/${storefront.toLowerCase()}/albums/${pl.id}/tracks`);
       }
 
       setTracks(allTracks);
@@ -649,10 +657,10 @@ export default function App() {
           <div className="section-label">Kütüphane</div>
           <ul>
             <li className={currentView === 'home' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('home'); setCurrentPl(null); setTrackQ(''); }}>
-              Ana Sayfa
+              <I.home className="icon" /> Ana Sayfa
             </li>
             <li className={currentView === 'playlists' && !currentPl ? 'active' : ''} onClick={() => { setCurrentView('playlists'); setCurrentPl(null); setTrackQ(''); }}>
-              Çalma Listeleri
+              <I.music className="icon" /> Çalma Listeleri
             </li>
           </ul>
 
@@ -688,63 +696,61 @@ export default function App() {
         {/* ── MAIN ── */}
         <main className="main">
           {!currentPl ? (
-            <div className="library-view">
-              {currentView === 'home' ? (
-                <>
-                  <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
-                  {recommendations.length > 0 ? recommendations.map(rec => (
-                    <div key={rec.id} style={{ marginBottom: '3rem' }}>
-                      <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>
-                        {rec.attributes.title.stringForDisplay}
-                      </h2>
-                      <div className="grid">
-                        {rec.relationships.contents.data.map(item => (
-                          <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
-                            <div className="card-img-wrap">
-                              <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
-                              <div className="card-play-overlay"><I.play /></div>
-                            </div>
-                            <div className="card-info">
-                              <div className="card-title">{item.attributes.name}</div>
-                              <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
-                            </div>
+            currentView === 'home' ? (
+              <div className="library-view">
+                <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
+                {recommendations.length > 0 ? recommendations.map(rec => (
+                  <div key={rec.id} style={{ marginBottom: '3rem' }}>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>
+                      {rec.attributes.title.stringForDisplay}
+                    </h2>
+                    <div className="grid">
+                      {rec.relationships.contents.data.map(item => (
+                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
+                          <div className="card-img-wrap">
+                            <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
+                            <div className="card-play-overlay"><I.play /></div>
                           </div>
-                        ))}
+                          <div className="card-info">
+                            <div className="card-title">{item.attributes.name}</div>
+                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )) : (
+                   <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
+                )}
+              </div>
+            ) : currentView === 'playlists' ? (
+              <div className="library-view">
+                <div className="lib-header">
+                  <h1 className="page-title">Çalma Listeleri</h1>
+                  <button className="new-pl-btn" onClick={() => setEditPl({})}>+ Yeni Liste</button>
+                </div>
+                <div className="grid">
+                  {filteredPl.map(p => (
+                    <div key={p.id} className="card" onClick={() => openPlaylist(p)} onContextMenu={e => { e.preventDefault(); setPlCtxMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}>
+                      <div className="card-img-wrap">
+                        <img src={artURL(p.attributes.artwork, 300)} alt="Cover" />
+                        <div className="card-play-overlay"><I.play /></div>
+                      </div>
+                      <div className="card-info">
+                        <div className="card-title">{p.attributes.name}</div>
+                        <div className="card-artist">Apple Music</div>
                       </div>
                     </div>
-                  )) : (
-                     <div style={{ opacity: 0.5 }}>Öneriler yükleniyor...</div>
-                  )}
-                </>
-              ) : currentView === 'playlists' ? (
-                <>
-                  <div className="lib-header">
-                    <h1 className="page-title">Çalma Listeleri</h1>
-                    <button className="new-pl-btn" onClick={() => setEditPl({})}>+ Yeni Liste</button>
-                  </div>
-                  <div className="grid">
-                    {filteredPl.map(p => (
-                      <div key={p.id} className="card" onClick={() => openPlaylist(p)} onContextMenu={e => { e.preventDefault(); setPlCtxMenu({ x: e.clientX, y: e.clientY, playlist: p }); }}>
-                        <div className="card-img-wrap">
-                          <img src={artURL(p.attributes.artwork, 300)} alt="Cover" />
-                          <div className="card-play-overlay"><I.play /></div>
-                        </div>
-                        <div className="card-info">
-                          <div className="card-title">{p.attributes.name}</div>
-                          <div className="card-artist">Apple Music</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="home-screen">
-                  <img src="/icon-192.png" className="home-icon" alt="Cognac" />
-                  <div className="home-title">Müzik Krallığına Hoş Geldiniz</div>
-                  <div className="home-sub">Sol menüden bir liste seçin<br/><span style={{opacity:.5, fontSize:'.82rem'}}>Space = oynat · ← → = şarkı geç · ↑ ↓ = ses</span></div>
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="home-screen">
+                <img src="/icon-192.png" className="home-icon" alt="Cognac" />
+                <div className="home-title">Müzik Krallığına Hoş Geldiniz</div>
+                <div className="home-sub">Sol menüden bir liste seçin<br/><span style={{opacity:.5, fontSize:'.82rem'}}>Space = oynat · ← → = şarkı geç · ↑ ↓ = ses</span></div>
+              </div>
+            )
           ) : (
             <>
               <div className="main-header">
