@@ -337,14 +337,17 @@ export default function App() {
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
-      if (currentPl && !trackQ) {
-         await mk.setQueue({ playlist: currentPl.id, startPosition: idx });
-      } else {
-         await mk.setQueue({ items: displayed });
-         await mk.changeToMediaAtIndex(idx);
-      }
+      
+      // Apple MusicKit Web API 100'den fazla raw objeyi sıraya alırken kilitleniyor!
+      // Bu yüzden şarkının etrafındaki 100 şarkılık güvenli bir dilim alıyoruz.
+      const start = Math.max(0, idx - 20);
+      const safeQueue = displayed.slice(start, start + 100);
+      const safeIdx = safeQueue.findIndex(t => t.id === track.id);
+      
+      await mk.setQueue({ items: safeQueue });
+      await mk.changeToMediaAtIndex(safeIdx);
       await mk.play();
-    } catch (e) { alert('Müzik Hatası: ' + e.message); }
+    } catch (e) { alert('Müzik Hatası: ' + (e.message || JSON.stringify(e))); }
   };
 
   const playNext = async item => {
