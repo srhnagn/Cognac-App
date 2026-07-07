@@ -168,7 +168,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
             return .success
         }
         center.previousTrackCommand.addTarget { [weak self] _ in
-            self?.webView.evaluateJavaScript("window.MusicKit && window.MusicKit.getInstance().skipToPreviousItem()")
+            let js = "window.MusicKit && (window.MusicKit.getInstance().currentPlaybackTime > 5 ? window.MusicKit.getInstance().seekToTime(0) : window.MusicKit.getInstance().skipToPreviousItem())"
+            self?.webView.evaluateJavaScript(js)
             return .success
         }
     }

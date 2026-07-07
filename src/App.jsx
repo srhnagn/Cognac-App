@@ -387,9 +387,9 @@ export default function App() {
       
       await mk.setQueue({ items: safeQueue });
       let realIdx = mk.queue?.items?.findIndex(i => {
-         const iCat = i.id || i.sourceId || i.attributes?.playParams?.id || i.attributes?.playParams?.catalogId;
-         const tCat = track.attributes?.playParams?.id || track.attributes?.playParams?.catalogId || track.id;
-         return iCat === tCat || i.id === track.id || i.sourceId === track.id;
+         const iName = i.attributes?.name || i.title;
+         const tName = track.attributes?.name || track.title;
+         return iName === tName;
       });
       if (realIdx === undefined || realIdx === -1) realIdx = safeIdx;
       
@@ -406,6 +406,19 @@ export default function App() {
       if (mk) await mk.playNext({ items: [item] });
     } catch (e) { alert('Sıraya eklenemedi: ' + e?.message); }
   };
+  
+  const playPrev = async () => {
+    try {
+      if (mk) {
+        if (mk.currentPlaybackTime > 5) {
+          await mk.seekToTime(0);
+        } else {
+          await mk.skipToPreviousItem();
+        }
+      }
+    } catch(e) {}
+  };
+
   const addToQueue = async item => {
     try {
       if (mk) await mk.playLater({ items: [item] });
@@ -787,7 +800,7 @@ export default function App() {
           <div className="center">
             <div className="ctrl-btns">
               <button className={`cbtn ${shuffle?'on':''}`} onClick={cycleShuffle} title="Karıştır"><I.shuffle /></button>
-              <button className="cbtn" onClick={() => mk?.skipToPreviousItem()} title="Önceki (←)"><I.prev /></button>
+              <button className="cbtn" onClick={playPrev} title="Önceki (←)"><I.prev /></button>
               <button className="pp-btn" onClick={togglePlay} title="Space">
                 {playing ? <I.pause /> : <I.play />}
               </button>
