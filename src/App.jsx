@@ -197,7 +197,7 @@ export default function App() {
         m.addEventListener('queuePositionDidChange', () => updateQ(m));
         
         m.addEventListener('mediaItemDidChange', e => {
-          setNowPlaying(e.item);
+          setNP(e.item);
           setProg(0);
           updateQ(m);
         });
@@ -217,7 +217,7 @@ export default function App() {
           setProg(mk.currentPlaybackTime || 0); 
           setDur(mk.currentPlaybackDuration || 0); 
           if (mk.nowPlayingItem && (!nowPlaying || mk.nowPlayingItem.id !== nowPlaying.id)) {
-            setNowPlaying(mk.nowPlayingItem);
+            setNP(mk.nowPlayingItem);
           }
         }
       }, 500);

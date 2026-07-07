@@ -81,6 +81,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         let fileMenu = NSMenu(title: "Dosya")
         fileMenuItem.submenu = fileMenu
         fileMenu.addItem(withTitle: "Pencereyi Kapat", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        fileMenu.addItem(NSMenuItem.separator())
+        fileMenu.addItem(withTitle: "Kitaplığı Güncelle (Reload)", action: #selector(reloadApp(_:)), keyEquivalent: "r")
         
         let editMenuItem = NSMenuItem()
         editMenuItem.title = "Düzenle"
@@ -136,6 +138,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDe
         
         let req = URLRequest(url: URL(string: "http://localhost:5173")!)
         webView.load(req)
+    }
+
+    @objc func reloadApp(_ sender: Any?) {
+        webView.reload()
     }
 
     // MARK: - Auth popup (SubView Overlay)
