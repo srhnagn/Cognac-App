@@ -260,9 +260,12 @@ export default function App() {
   }, [nowPlaying, rightPanel]);
 
   /* ── Load on auth ── */
-  useEffect(() => { if (authorized && mk) { fetchPlaylists(); fetchStorefront(); } }, [authorized, mk]);
+  useEffect(() => { if (authorized && mk) { fetchPlaylists(); fetchStorefront(); fetchHome(); } }, [authorized, mk]);
 
-  const hdrs = () => ({ 'Authorization': `Bearer ${DEV_TOKEN}`, 'Music-User-Token': mk?.musicUserToken || '' });
+  const hdrs = () => ({ 
+    'Authorization': `Bearer ${DEV_TOKEN}`, 
+    'Music-User-Token': window.MusicKit?.getInstance()?.musicUserToken || mk?.musicUserToken || '' 
+  });
 
   const fetchStorefront = async () => {
     try {
