@@ -162,6 +162,10 @@ export default function App() {
   const [coverModal, setCoverModal] = useState(null); // URL for full screen cover
   const [editPl, setEditPl]       = useState(null); // Playlist object for editing
 
+  // Drag and Drop States for Queue
+  const [dragItem, setDragItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
+
   const [trackQ, setTrackQ]       = useState('');
   const [sortKey, setSortKey]     = useState(null);
   const [sortDir, setSortDir]     = useState('asc');
@@ -202,7 +206,6 @@ export default function App() {
           updateQ(m);
         });
         
-        // Sıra yükleme mantığı MusicKit objelerini bozduğu için geçici olarak devre dışı bırakıldı.
         fetchStorefront();
       } catch (e) { console.error(e); }
     };
@@ -262,7 +265,6 @@ export default function App() {
       setLyricsLoading(true);
       const m = window.MusicKit.getInstance();
       
-      // Şarkının orijinal mağazasını (storefront) URL'den çek (örn: /ru/ veya /tr/)
       const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/songs/${catalogId}/lyrics`);
       const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.plainLyrics;
       
@@ -273,18 +275,13 @@ export default function App() {
         throw new Error("Apple Music yetkisi yok.");
       }
     } catch (e) {
-      // 3. Parti Alternatif (Genius/OVH Fallback)
       try {
         let title = item?.attributes?.name;
         let artist = item?.attributes?.artistName;
         
-        // Şarkının orijinal mağazasını URL'den buluyoruz (örneğin /ru/).
-        // Eğer şarkı yabancıysa, Apple'ın TR mağazası bize İngilizce okunuşunu verir.
-        // 3. Parti sunucularda Kiril/Yerel isimle arama yapmak için o mağazadan gerçek ismini çekiyoruz:
         const itemSf = item?.attributes?.url?.match(/music\.apple\.com\/([a-z]{2})\//i)?.[1]?.toLowerCase();
         if (itemSf && itemSf !== storefront.toLowerCase()) {
            try {
-             // Sadece Developer Token ile (bölge kilidi olmadan) şarkı bilgisini çek
              const r = await fetch(`https://api.music.apple.com/v1/catalog/${itemSf}/songs/${catalogId}`, { headers: { 'Authorization': `Bearer ${DEV_TOKEN}` } });
              const j = await r.json();
              if (j?.data?.[0]?.attributes) {
@@ -295,7 +292,6 @@ export default function App() {
         }
 
         if (title && artist) {
-          // api.lyrics.ovh herkese açık ve CORS destekli bir lirik API'sidir.
           const ovhRes = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
           if (ovhRes.ok) {
             const ovhData = await ovhRes.json();
@@ -332,6 +328,37 @@ export default function App() {
   const login  = async () => { try { await mk.authorize(); setAuth(mk.isAuthorized); } catch { alert('Giriş başarısız.'); } };
   const logout = async () => { await mk.unauthorize(); setAuth(false); setPlaylists([]); setTracks([]); setCurrentPl(null); };
 
+  /* ── Queue Drag & Drop ── */
+  const handleDragStart = (e, index) => {
+    setDragItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragEnter = (e, index) => {
+    setDragOverItem(index);
+  };
+  const handleDragEnd = () => {
+    if (dragItem !== null && dragOverItem !== null && dragItem !== dragOverItem && mk?.queue) {
+      try {
+        const fromGlobal = mk.queue.position + 1 + dragItem;
+        const toGlobal   = mk.queue.position + 1 + dragOverItem;
+        
+        if (typeof mk.queue.moveItem === 'function') {
+           mk.queue.moveItem(fromGlobal, toGlobal);
+        } else if (Array.isArray(mk.queue.items)) {
+           const item = mk.queue.items.splice(fromGlobal, 1)[0];
+           mk.queue.items.splice(toGlobal, 0, item);
+        }
+        // Force re-sync
+        const m = window.MusicKit.getInstance();
+        const items = m.queue.items || [];
+        const pos = m.queue.position ?? 0;
+        setQueue(items.slice(pos + 1, pos + 20));
+      } catch (err) { console.warn("Queue reorder failed", err); }
+    }
+    setDragItem(null);
+    setDragOverItem(null);
+  };
+
   /* ── Playlist ── */
   const openPlaylist = async pl => {
     setCurrentPl(pl); setTracks([]); setTrackQ(''); setSortKey(null); setLyrics(null);
@@ -359,13 +386,12 @@ export default function App() {
       const safeIdx = safeQueue.findIndex(t => t.id === track.id);
       
       await mk.setQueue({ items: safeQueue });
-      // Apple MusicKit bazen dinlenilemeyen veya bölgesel olarak gizli şarkıları sıradan filtreler.
-      // Bu yüzden "safeIdx" kayma yapabilir. Gerçek sıradaki (queue içindeki) indeksi buluyoruz:
-      const realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id) ?? safeIdx;
+      let realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id);
+      if (realIdx === undefined || realIdx === -1) realIdx = safeIdx;
+      
       await mk.changeToMediaAtIndex(Math.max(0, realIdx));
       await mk.play();
     } catch (e) { 
-      // WKWebView natively blocks alert(), so we MUST display it in the UI!
       setLyrics([`KRİTİK ÇALMA HATASI: ${e.message || JSON.stringify(e)}`, `Lütfen bunu kopyalayıp bana at.`]);
       setRightPanel('lyrics');
     }
@@ -396,7 +422,6 @@ export default function App() {
   };
 
   const addToPlaylist = (track, pl) => {
-    // Apple Music API doesn't allow adding tracks via MusicKit JS without server
     alert(`"${track.attributes.name}" → "${pl.attributes.name}" listesine eklemek için Apple Music uygulamasını kullanın.`);
   };
 
@@ -453,7 +478,6 @@ export default function App() {
   const pct    = duration > 0 ? (progress / duration) * 100 : 0;
   const volPct = Math.round((muted ? 0 : volume) * 100);
   const VIcon  = muted || volume === 0 ? I.volMute : volume < 0.5 ? I.volLow : I.volHigh;
-  const npArt  = artURL(nowPlaying?.attributes?.artwork, 52);
   const isNP   = t => nowPlaying && t.id === nowPlaying.id;
 
   const hasRightPanel = rightPanel !== null;
@@ -708,7 +732,17 @@ export default function App() {
                     <button className="queue-clear-btn" onClick={() => mk && mk.setQueue({ items: [mk.nowPlayingItem] })}>Sırayı Temizle</button>
                   </div>
                   {queue.length > 0 ? queue.map((item, i) => (
-                    <div key={'q'+i} className="queue-item" onClick={() => mk.changeToMediaAtIndex((mk.queue.position ?? 0) + i + 1)} onContextMenu={e => { e.preventDefault(); setQCtxMenu({ x: e.clientX, y: e.clientY, index: (mk.queue.position ?? 0) + i + 1, track: item }); }}>
+                    <div 
+                        key={'q'+i} 
+                        className={`queue-item ${dragItem === i ? 'dragging' : ''} ${dragOverItem === i ? 'drag-over' : ''}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, i)}
+                        onDragEnter={(e) => handleDragEnter(e, i)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => e.preventDefault()}
+                        onClick={() => mk.changeToMediaAtIndex((mk.queue.position ?? 0) + i + 1)}
+                        onContextMenu={e => { e.preventDefault(); setQCtxMenu({ x: e.clientX, y: e.clientY, index: (mk.queue.position ?? 0) + i + 1, track: item }); }}
+                    >
                       <div className="qi-dot" />
                       <div className="qi-info">
                         <div className="qi-name">{item.attributes?.name || item.title}</div>

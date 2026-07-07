@@ -585,6 +585,8 @@ body {
 .queue-item.history:hover { opacity:1; }
 .queue-item.active { background:var(--gold-dim); }
 .queue-item:not(.active):hover { background:var(--hover); }
+.queue-item.dragging { opacity:0.4; background:rgba(255,255,255,0.1); border:1px dashed rgba(255,255,255,0.3); }
+.queue-item.drag-over { border-top:2px solid var(--gold); background:rgba(201,168,76,0.1); }
 .qi-dot { width:6px; height:6px; border-radius:50%; background:var(--text-dim); flex-shrink:0; }
 .qi-dot.on { background:var(--gold); }
 .qi-info { min-width:0; }
