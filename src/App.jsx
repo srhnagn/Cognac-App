@@ -173,8 +173,13 @@ export default function App() {
   const [sortKey, setSortKey]     = useState(null);
   const [sortDir, setSortDir]     = useState('asc');
 
-  const [currentView, setCurrentView] = useState('welcome'); // 'welcome', 'home', 'playlists'
+  const [currentView, setCurrentView] = useState('welcome'); // 'welcome', 'home', 'playlists', 'search'
   const [recommendations, setRecommendations] = useState([]);
+  const [recentPlayed, setRecentPlayed] = useState([]);
+  const [heavyRotation, setHeavyRotation] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchCtx, setSearchCtx] = useState(null);
   const [showSettings, setSettings] = useState(false);
   const [userName, setUserName]   = useState(window.MAC_USER || localStorage.getItem('cognac_username') || 'Apple Music');
 
@@ -271,6 +276,14 @@ export default function App() {
       const res = await m.api.music('v1/me/recommendations');
       if (res?.data?.data) {
         setRecommendations(res.data.data);
+      }
+      const recent = await m.api.music('v1/me/recent/played');
+      if (recent?.data?.data) {
+        setRecentPlayed(recent.data.data);
+      }
+      const heavy = await m.api.music('v1/me/history/heavy-rotation');
+      if (heavy?.data?.data) {
+        setHeavyRotation(heavy.data.data);
       }
     } catch (e) { console.warn("Home fetch failed", e); }
   };
@@ -501,8 +514,37 @@ export default function App() {
     catch { alert('Sıradan kaldırılamadı.'); }
   };
 
-  const addToPlaylist = (track, pl) => {
-    alert(`"${track.attributes.name}" → "${pl.attributes.name}" listesine eklemek için Apple Music uygulamasını kullanın.`);
+  const doSearch = async () => {
+    if (!searchQuery.trim()) return;
+    try {
+      const m = window.MusicKit.getInstance();
+      const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/search?types=songs&limit=50&term=${encodeURIComponent(searchQuery)}`);
+      if (res?.data?.results?.songs?.data) {
+         setSearchResults(res.data.results.songs.data);
+      } else {
+         setSearchResults([]);
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const addToPlaylist = async (track, playlist) => {
+      try {
+         const res = await fetch(`https://api.music.apple.com/v1/me/library/playlists/${playlist.attributes.playParams.id}/tracks`, {
+             method: 'POST',
+             headers: hdrs(),
+             body: JSON.stringify({ data: [{ id: track.id, type: track.type }] })
+         });
+         if (res.ok) {
+             setLyrics([`BAŞARILI: "${track.attributes?.name}" şarkısı "${playlist.attributes.name}" listesine eklendi!`]);
+             setRightPanel('lyrics');
+         } else {
+             alert('Ekleme başarısız oldu.');
+         }
+         setSearchCtx(null);
+      } catch (e) {
+         console.error(e);
+         alert('Ekleme başarısız oldu.');
+      }
   };
 
   const togglePlay = async () => { 
@@ -540,19 +582,20 @@ export default function App() {
   };
   const arrow = key => sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : '';
 
-  const displayed = useMemo(() => {
-    let l = [...tracks];
-    if (trackQ) {
-      const q = trackQ.toLowerCase();
-      l = l.filter(t => t.attributes.name?.toLowerCase().includes(q) || t.attributes.artistName?.toLowerCase().includes(q) || t.attributes.albumName?.toLowerCase().includes(q));
-    }
-    if (sortKey) l.sort((a, b) => {
-      const av = (a.attributes[sortKey] || '').toString().toLowerCase();
-      const bv = (b.attributes[sortKey] || '').toString().toLowerCase();
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
-    return l;
-  }, [tracks, trackQ, sortKey, sortDir]);
+  const displayed = currentPl ? tracks.filter(t => {
+    const term = trackQ.toLowerCase();
+    const n = t.attributes?.name?.toLowerCase() || '';
+    const a = t.attributes?.artistName?.toLowerCase() || '';
+    return n.includes(term) || a.includes(term);
+  }).sort((a,b) => {
+    if (!sortKey) return 0;
+    let va = a.attributes?.[sortKey] || '';
+    let vb = b.attributes?.[sortKey] || '';
+    if (sortKey === 'durationInMillis') { va = Number(va); vb = Number(vb); }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  }) : currentView === 'search' ? searchResults : [];
 
   /* ── Derived ── */
   const pct    = duration > 0 ? (progress / duration) * 100 : 0;
@@ -573,6 +616,16 @@ export default function App() {
         <h1>Cognac</h1>
         <p>Apple Music kütüphanenize erişmek için<br/>giriş yapın.</p>
         <button className="auth-btn" onClick={login}>Apple Kimliği ile Giriş Yap</button>
+        {searchCtx && (
+          <div className="ctx-menu" style={{ left: searchCtx.x, top: searchCtx.y, maxHeight: '300px', overflowY: 'auto' }}>
+            <div className="ctx-title" style={{ padding: '8px 12px', opacity: 0.5, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Listeye Ekle</div>
+            {playlists.map(pl => (
+              <div key={pl.id} className="ctx-item" onClick={() => addToPlaylist(searchCtx.track, pl)}>
+                🎵 {pl.attributes.name}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -711,6 +764,47 @@ export default function App() {
             currentView === 'home' ? (
               <div className="library-view" style={{ padding: '4rem 4rem 2rem 4rem' }}>
                 <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
+                
+                {recentPlayed.length > 0 && (
+                  <div style={{ marginBottom: '3rem' }}>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>Son Çalınanlar</h2>
+                    <div className="grid">
+                      {recentPlayed.map(item => (
+                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
+                          <div className="card-img-wrap">
+                            <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
+                            <div className="card-play-overlay"><I.play /></div>
+                          </div>
+                          <div className="card-info">
+                            <div className="card-title">{item.attributes.name}</div>
+                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {heavyRotation.length > 0 && (
+                  <div style={{ marginBottom: '3rem' }}>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>En Çok Dinlenenler</h2>
+                    <div className="grid">
+                      {heavyRotation.map(item => (
+                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
+                          <div className="card-img-wrap">
+                            <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
+                            <div className="card-play-overlay"><I.play /></div>
+                          </div>
+                          <div className="card-info">
+                            <div className="card-title">{item.attributes.name}</div>
+                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {recommendations.length > 0 ? recommendations.map(rec => (
                   <div key={rec.id} style={{ marginBottom: '3rem' }}>
                     <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>
@@ -757,10 +851,41 @@ export default function App() {
                 </div>
               </div>
             ) : currentView === 'search' ? (
-              <div className="home-screen">
-                 <I.search style={{ width: '48px', height: '48px', opacity: 0.2, marginBottom: '1rem' }} />
-                 <div className="home-title" style={{ opacity: 0.5 }}>Apple Music'te Ara</div>
-                 <div className="home-sub" style={{ opacity: 0.4 }}>Katalog araması yakında eklenecek.</div>
+              <div className="library-view" style={{ padding: '4rem 4rem' }}>
+                <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Katalogda Ara</h1>
+                <form onSubmit={e => { e.preventDefault(); doSearch(); }} style={{ display: 'flex', gap: '1rem', marginBottom: '3rem', width: '100%', maxWidth: '600px' }}>
+                   <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Apple Music'te milyonlarca şarkıyı ara..." style={{ flex: 1, padding: '1rem 1.5rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: '1.1rem', outline: 'none' }} />
+                   <button type="submit" style={{ padding: '0 2rem', borderRadius: '12px', background: 'var(--gold)', color: 'black', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', border: 'none' }}>Ara</button>
+                </form>
+                {searchResults.length > 0 && (
+                   <div className="track-list" style={{ marginTop: '1rem' }}>
+                     {searchResults.map((t, i) => (
+                        <div 
+                          key={t.id} 
+                          className="track-item" 
+                          onDoubleClick={() => playTrack(t)}
+                          onContextMenu={e => { e.preventDefault(); setSearchCtx({ x: e.clientX, y: e.clientY, track: t }); }}
+                        >
+                          <div className="track-cell cell-idx" onClick={() => playTrack(t)}>
+                            <div className="idx-num">{i + 1}</div>
+                            <div className="idx-play"><I.play /></div>
+                          </div>
+                          <div className="track-cell cell-title">
+                            <img src={artURL(t.attributes?.artwork, 40)} className="track-art" alt="" />
+                            <div className="title-stack">
+                              <span className="t-name">{t.attributes?.name}</span>
+                              <span className="t-artist">{t.attributes?.artistName}</span>
+                            </div>
+                          </div>
+                          <div className="track-cell cell-album">{t.attributes?.albumName}</div>
+                          <div className="track-cell cell-time">{fmtDur(t.attributes?.durationInMillis)}</div>
+                        </div>
+                     ))}
+                   </div>
+                )}
+                {searchQuery && searchResults.length === 0 && (
+                   <div style={{ opacity: 0.5, marginTop: '2rem' }}>Arama sonuçları burada görünecek...</div>
+                )}
               </div>
             ) : (
               <div className="home-screen">
