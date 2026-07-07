@@ -275,8 +275,25 @@ export default function App() {
     } catch (e) {
       // 3. Parti Alternatif (Genius/OVH Fallback)
       try {
-        const title = item?.attributes?.name;
-        const artist = item?.attributes?.artistName;
+        let title = item?.attributes?.name;
+        let artist = item?.attributes?.artistName;
+        
+        // Şarkının orijinal mağazasını URL'den buluyoruz (örneğin /ru/).
+        // Eğer şarkı yabancıysa, Apple'ın TR mağazası bize İngilizce okunuşunu verir.
+        // 3. Parti sunucularda Kiril/Yerel isimle arama yapmak için o mağazadan gerçek ismini çekiyoruz:
+        const itemSf = item?.attributes?.url?.match(/music\.apple\.com\/([a-z]{2})\//i)?.[1]?.toLowerCase();
+        if (itemSf && itemSf !== storefront.toLowerCase()) {
+           try {
+             // Sadece Developer Token ile (bölge kilidi olmadan) şarkı bilgisini çek
+             const r = await fetch(`https://api.music.apple.com/v1/catalog/${itemSf}/songs/${catalogId}`, { headers: { 'Authorization': `Bearer ${DEV_TOKEN}` } });
+             const j = await r.json();
+             if (j?.data?.[0]?.attributes) {
+                 title = j.data[0].attributes.name;
+                 artist = j.data[0].attributes.artistName;
+             }
+           } catch(err) {}
+        }
+
         if (title && artist) {
           // api.lyrics.ovh herkese açık ve CORS destekli bir lirik API'sidir.
           const ovhRes = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
@@ -342,7 +359,10 @@ export default function App() {
       const safeIdx = safeQueue.findIndex(t => t.id === track.id);
       
       await mk.setQueue({ items: safeQueue });
-      await mk.changeToMediaAtIndex(safeIdx);
+      // Apple MusicKit bazen dinlenilemeyen veya bölgesel olarak gizli şarkıları sıradan filtreler.
+      // Bu yüzden "safeIdx" kayma yapabilir. Gerçek sıradaki (queue içindeki) indeksi buluyoruz:
+      const realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id) ?? safeIdx;
+      await mk.changeToMediaAtIndex(Math.max(0, realIdx));
       await mk.play();
     } catch (e) { 
       // WKWebView natively blocks alert(), so we MUST display it in the UI!
