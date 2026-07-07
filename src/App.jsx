@@ -386,7 +386,11 @@ export default function App() {
       const safeIdx = safeQueue.findIndex(t => t.id === track.id);
       
       await mk.setQueue({ items: safeQueue });
-      let realIdx = mk.queue?.items?.findIndex(i => i.id === track.id || i.sourceId === track.id);
+      let realIdx = mk.queue?.items?.findIndex(i => {
+         const iCat = i.id || i.sourceId || i.attributes?.playParams?.id || i.attributes?.playParams?.catalogId;
+         const tCat = track.attributes?.playParams?.id || track.attributes?.playParams?.catalogId || track.id;
+         return iCat === tCat || i.id === track.id || i.sourceId === track.id;
+      });
       if (realIdx === undefined || realIdx === -1) realIdx = safeIdx;
       
       await mk.changeToMediaAtIndex(Math.max(0, realIdx));
@@ -734,12 +738,7 @@ export default function App() {
                   {queue.length > 0 ? queue.map((item, i) => (
                     <div 
                         key={'q'+i} 
-                        className={`queue-item ${dragItem === i ? 'dragging' : ''} ${dragOverItem === i ? 'drag-over' : ''}`}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, i)}
-                        onDragEnter={(e) => handleDragEnter(e, i)}
-                        onDragEnd={handleDragEnd}
-                        onDragOver={(e) => e.preventDefault()}
+                        className="queue-item"
                         onClick={() => mk.changeToMediaAtIndex((mk.queue.position ?? 0) + i + 1)}
                         onContextMenu={e => { e.preventDefault(); setQCtxMenu({ x: e.clientX, y: e.clientY, index: (mk.queue.position ?? 0) + i + 1, track: item }); }}
                     >
