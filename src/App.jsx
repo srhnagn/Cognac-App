@@ -337,9 +337,6 @@ export default function App() {
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
-      
-      // Apple MusicKit Web API 100'den fazla raw objeyi sıraya alırken kilitleniyor!
-      // Bu yüzden şarkının etrafındaki 100 şarkılık güvenli bir dilim alıyoruz.
       const start = Math.max(0, idx - 20);
       const safeQueue = displayed.slice(start, start + 100);
       const safeIdx = safeQueue.findIndex(t => t.id === track.id);
@@ -347,7 +344,11 @@ export default function App() {
       await mk.setQueue({ items: safeQueue });
       await mk.changeToMediaAtIndex(safeIdx);
       await mk.play();
-    } catch (e) { alert('Müzik Hatası: ' + (e.message || JSON.stringify(e))); }
+    } catch (e) { 
+      // WKWebView natively blocks alert(), so we MUST display it in the UI!
+      setLyrics([`KRİTİK ÇALMA HATASI: ${e.message || JSON.stringify(e)}`, `Lütfen bunu kopyalayıp bana at.`]);
+      setRightPanel('lyrics');
+    }
   };
 
   const playNext = async item => {
