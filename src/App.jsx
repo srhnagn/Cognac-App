@@ -333,9 +333,13 @@ export default function App() {
       const m = window.MusicKit.getInstance();
       
       const res = await m.api.music(`v1/catalog/${storefront.toLowerCase()}/songs/${catalogId}/lyrics`);
-      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.plainLyrics;
+      const plain = res?.data?.data?.[0]?.attributes?.plainLyrics || res?.data?.[0]?.attributes?.plainLyrics;
+      const ttml = res?.data?.data?.[0]?.attributes?.ttml || res?.data?.[0]?.attributes?.ttml;
       
-      if (ttml) {
+      if (plain) {
+        const lines = plain.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        setLyrics(lines.length ? lines : ['Sözler bulunamadı.']);
+      } else if (ttml) {
         const rawText = ttml.replace(/<[^>]+>/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
         setLyrics(rawText.length ? rawText : ['Sözler bulunamadı.']);
       } else {
@@ -821,7 +825,7 @@ export default function App() {
                           <div className="card-info">
                             <div className="card-title">{item.attributes.name}</div>
                             <div className="card-artist">
-                              {item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes?.artistName || item.attributes?.curatorName || item.relationships?.curator?.data?.[0]?.attributes?.name || item.attributes?.description?.short || 'Apple Music')}
+                              {item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes?.curatorName || item.attributes?.artistName || item.attributes?.description?.short || item.attributes?.description?.standard?.slice(0, 40) || 'Apple Music')}
                             </div>
                           </div>
                         </div>
