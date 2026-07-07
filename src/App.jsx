@@ -177,16 +177,12 @@ export default function App() {
 
   /* ── Init MusicKit ── */
   useEffect(() => {
-    const updateQ = () => {
-      const items = mk.queue.items || [];
-      const pos   = mk.queue.position ?? 0;
+    const updateQ = (m_instance) => {
+      if (!m_instance || !m_instance.queue) return;
+      const items = m_instance.queue.items || [];
+      const pos   = m_instance.queue.position ?? 0;
       setQueue(items.slice(pos + 1, pos + 20));
       setHistory(items.slice(Math.max(0, pos - 20), pos).reverse());
-      
-      try {
-        localStorage.setItem('cognac_queue', JSON.stringify(items));
-        localStorage.setItem('cognac_queue_pos', pos.toString());
-      } catch(e) {}
     };
 
     const init = async () => {
@@ -197,13 +193,13 @@ export default function App() {
         
         m.addEventListener('authorizationStatusDidChange', () => setAuth(m.isAuthorized));
         m.addEventListener('playbackStateDidChange', e => setPlaying(e.state === window.MusicKit.PlaybackStates.playing));
-        m.addEventListener('queueItemsDidChange', updateQ);
-        m.addEventListener('queuePositionDidChange', updateQ);
+        m.addEventListener('queueItemsDidChange', () => updateQ(m));
+        m.addEventListener('queuePositionDidChange', () => updateQ(m));
         
         m.addEventListener('mediaItemDidChange', e => {
           setNowPlaying(e.item);
           setProg(0);
-          updateQ();
+          updateQ(m);
         });
         
         // Sıra yükleme mantığı MusicKit objelerini bozduğu için geçici olarak devre dışı bırakıldı.
@@ -274,10 +270,28 @@ export default function App() {
         const rawText = ttml.replace(/<[^>]+>/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
         setLyrics(rawText.length ? rawText : ['Sözler bulunamadı.']);
       } else {
-        setLyrics([`Sözler mevcut değil. (API Yanıtı: ${JSON.stringify(res)})`]);
+        throw new Error("Apple Music yetkisi yok.");
       }
-    } catch (e) { 
-      setLyrics([`HATA: ${e.message || JSON.stringify(e)}`, `CatalogID: ${item?.attributes?.playParams?.catalogId || item?.id}`]); 
+    } catch (e) {
+      // 3. Parti Alternatif (Genius/OVH Fallback)
+      try {
+        const title = item?.attributes?.name;
+        const artist = item?.attributes?.artistName;
+        if (title && artist) {
+          // api.lyrics.ovh herkese açık ve CORS destekli bir lirik API'sidir.
+          const ovhRes = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+          if (ovhRes.ok) {
+            const ovhData = await ovhRes.json();
+            if (ovhData.lyrics) {
+              const lines = ovhData.lyrics.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+              setLyrics(["(Lyrics.ovh'dan çekildi)", "", ...lines]);
+              return;
+            }
+          }
+        }
+      } catch (err) {}
+      
+      setLyrics([`HATA: Apple Music bu bölgede sözleri gizliyor.`, `Ayrıca 3. parti sunucularda da bulunamadı.`]); 
     }
     finally { setLyricsLoading(false); }
   };
