@@ -175,8 +175,6 @@ export default function App() {
 
   const [currentView, setCurrentView] = useState('welcome'); // 'welcome', 'home', 'playlists', 'search'
   const [recommendations, setRecommendations] = useState([]);
-  const [recentPlayed, setRecentPlayed] = useState([]);
-  const [heavyRotation, setHeavyRotation] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchCtx, setSearchCtx] = useState(null);
@@ -279,14 +277,6 @@ export default function App() {
       const rec = await fetch('https://api.music.apple.com/v1/me/recommendations', { headers: hdrs() }).then(r => r.json());
       if (rec?.data) {
         setRecommendations(rec.data);
-      }
-      const recent = await fetch('https://api.music.apple.com/v1/me/recent/played', { headers: hdrs() }).then(r => r.json());
-      if (recent?.data) {
-        setRecentPlayed(recent.data);
-      }
-      const heavy = await fetch('https://api.music.apple.com/v1/me/history/heavy-rotation', { headers: hdrs() }).then(r => r.json());
-      if (heavy?.data) {
-        setHeavyRotation(heavy.data);
       }
     } catch (e) { console.warn("Home fetch failed", e); }
   };
@@ -465,7 +455,6 @@ export default function App() {
     }
   };
 
-  /* ── Playback ── */
   const playTrack = async track => {
     try {
       const idx = displayed.findIndex(t => t.id === track.id);
@@ -476,6 +465,20 @@ export default function App() {
       await mk.play();
     } catch (e) { 
       setLyrics([`KRİTİK ÇALMA HATASI: ${e.message || JSON.stringify(e)}`, `Lütfen bunu kopyalayıp bana at.`]);
+      setRightPanel('lyrics');
+    }
+  };
+
+  const playDirect = async (e, item) => {
+    if (e) e.stopPropagation();
+    try {
+      if (item.type === 'stations') await mk.setQueue({ station: item.id });
+      else if (item.type.includes('playlist')) await mk.setQueue({ playlist: item.id });
+      else if (item.type.includes('album')) await mk.setQueue({ album: item.id });
+      else await mk.setQueue({ [item.type]: item.id });
+      await mk.play();
+    } catch (err) {
+      setLyrics([`KRİTİK ÇALMA HATASI: ${err.message || JSON.stringify(err)}`, `Lütfen bunu kopyalayıp bana at.`]);
       setRightPanel('lyrics');
     }
   };
@@ -534,7 +537,7 @@ export default function App() {
          const res = await fetch(`https://api.music.apple.com/v1/me/library/playlists/${playlist.attributes.playParams.id}/tracks`, {
              method: 'POST',
              headers: hdrs(),
-             body: JSON.stringify({ data: [{ id: track.id, type: track.type }] })
+             body: JSON.stringify({ data: [{ id: track.id, type: 'songs' }] })
          });
          if (res.ok) {
              setLyrics([`BAŞARILI: "${track.attributes?.name}" şarkısı "${playlist.attributes.name}" listesine eklendi!`]);
@@ -767,46 +770,6 @@ export default function App() {
               <div className="library-view" style={{ padding: '4rem 4rem 2rem 4rem' }}>
                 <h1 className="page-title" style={{ fontSize: '2.5rem', marginBottom: '2rem' }}>Şimdi Dinle</h1>
                 
-                {recentPlayed.length > 0 && (
-                  <div style={{ marginBottom: '3rem' }}>
-                    <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>Son Çalınanlar</h2>
-                    <div className="grid">
-                      {recentPlayed.map(item => (
-                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
-                          <div className="card-img-wrap">
-                            <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
-                            <div className="card-play-overlay"><I.play /></div>
-                          </div>
-                          <div className="card-info">
-                            <div className="card-title">{item.attributes.name}</div>
-                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {heavyRotation.length > 0 && (
-                  <div style={{ marginBottom: '3rem' }}>
-                    <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>En Çok Dinlenenler</h2>
-                    <div className="grid">
-                      {heavyRotation.map(item => (
-                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
-                          <div className="card-img-wrap">
-                            <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
-                            <div className="card-play-overlay"><I.play /></div>
-                          </div>
-                          <div className="card-info">
-                            <div className="card-title">{item.attributes.name}</div>
-                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {recommendations.length > 0 ? recommendations.map(rec => (
                   <div key={rec.id} style={{ marginBottom: '3rem' }}>
                     <h2 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text)' }}>
@@ -814,14 +777,14 @@ export default function App() {
                     </h2>
                     <div className="grid">
                       {rec.relationships.contents.data.map(item => (
-                        <div key={item.id} className="card" onClick={() => openPlaylist(item)}>
+                        <div key={item.id} className="card" onClick={() => item.type === 'stations' ? playDirect(null, item) : openPlaylist(item)}>
                           <div className="card-img-wrap">
                             <img src={artURL(item.attributes.artwork, 300)} alt="Cover" />
-                            <div className="card-play-overlay"><I.play /></div>
+                            <div className="card-play-overlay" onClick={(e) => playDirect(e, item)}><I.play /></div>
                           </div>
                           <div className="card-info">
                             <div className="card-title">{item.attributes.name}</div>
-                            <div className="card-artist">{item.attributes.artistName || item.attributes.curatorName || 'Apple Music'}</div>
+                            <div className="card-artist">{item.type === 'stations' ? 'Radyo İstasyonu' : (item.attributes.artistName || item.attributes.curatorName || 'Apple Music')}</div>
                           </div>
                         </div>
                       ))}
@@ -1000,7 +963,10 @@ export default function App() {
                   {nowPlaying && (
                     <div className="queue-now" style={{ marginTop: '1.5rem' }}>
                       <div className="queue-label">Şu an çalıyor</div>
-                      <div className="queue-item active">
+                      <div 
+                        className="queue-item active"
+                        onContextMenu={e => { e.preventDefault(); setQCtxMenu({ x: e.clientX, y: e.clientY, index: mk.queue.position, track: nowPlaying }); }}
+                      >
                         <div className="qi-dot on" />
                         <div className="qi-info">
                           <div className="qi-name">{nowPlaying.attributes?.name}</div>
